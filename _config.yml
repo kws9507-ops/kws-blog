@@ -1,0 +1,9 @@
+title: "김우석의 기술 블로그"
+description: "Oracle, SharePlex, Linux, Snowflake 기술 공부 기록"
+author: "김우석"
+
+theme: minima
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
