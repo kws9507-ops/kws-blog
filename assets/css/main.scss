@@ -5,7 +5,7 @@
 @import "minimal-mistakes/skins/{{ site.minimal_mistakes_skin | default: 'default' }}";
 @import "minimal-mistakes";
 
-/* 메인 타이틀 볼드 처리 */
+/* 상단 메인 브랜드 타이틀 볼드 처리 */
 .masthead__menu-item--start,
 .site-title,
 a.site-title {
@@ -13,18 +13,28 @@ a.site-title {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 본문 콘텐츠 폭을 상단 헤더 너비와 동일하게 맞춤 (왼쪽 정렬) */
+/* 전체 메인 본문 폭 확장 및 좌측 정렬 */
 #main {
-  max-width: 1280px !important; /* 상단 헤더 상자 크기에 맞춤 */
+  max-width: 1280px !important;
   padding-left: 1em !important;
   padding-right: 1em !important;
   margin-left: auto !important;
   margin-right: auto !important;
 }
+
 .page {
   width: 100% !important;
   padding-right: 0 !important;
 }
+
 .page__inner-wrap {
+  width: 100% !important;
+}
+
+/* 상단 경로(Breadcrumbs) 왼쪽 정렬 및 여백 조정 */
+.breadcrumbs {
+  text-align: left !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
   width: 100% !important;
 }
