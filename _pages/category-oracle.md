@@ -1,5 +1,5 @@
 ---
-title: "Oracle"
+title: "<span style='color: red;'>Oracle</span>"
 layout: single
 permalink: /categories/oracle/
 author_profile: false
