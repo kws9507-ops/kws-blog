@@ -1,5 +1,5 @@
 ---
-title: "Snowflake"
+title: "<span style='color: #00a8e8;'>Snowflake</span>"
 layout: single
 permalink: /categories/snowflake/
 author_profile: false
