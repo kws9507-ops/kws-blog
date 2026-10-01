@@ -1,4 +1,4 @@
-title: "김우석의 기술 블로그"
+title: "김우석 기술 블로그"
 description: "Git · Linux · Oracle · SharePlex · Snowflake 기술 공부 기록"
 author:
   name: "김우석"
@@ -7,18 +7,18 @@ url: "https://kws9507-ops.github.io"
 baseurl: "/kws-blog"
 
 remote_theme: "mmistakes/minimal-mistakes"
+minimal_mistakes_skin: "default"
 
 plugins:
   - jekyll-include-cache
   - jekyll-feed
   - jekyll-seo-tag
-
-minimal_mistakes_skin: "default"
+  - jekyll-paginate
 
 markdown: kramdown
+highlighter: rouge
 
 search: true
-
 breadcrumbs: true
 
 paginate: 10
