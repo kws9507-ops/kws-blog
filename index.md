@@ -24,16 +24,6 @@ author_profile: false
     </ul>
   </div>
 
-  <!-- 주요 기술 스택 -->
-  <div>
-    <h3 style="font-size: 0.95rem; margin-top: 1rem; margin-bottom: 0.5rem; color: #495057;">🛠️ Tech Stack & Focus Area</h3>
-    <ul style="font-size: 0.9rem; color: #495057; padding-left: 1.2rem; margin-bottom: 0; line-height: 1.7;">
-      <li><strong>Database & CDC:</strong> Oracle (DBA, ORA 이슈 대응), SharePlex (CDC 데이터 복제, 이중화)</li>
-      <li><strong>Infrastructure & Data Warehouse:</strong> Linux (CentOS/RHEL, Shell Scripting), Snowflake (Data Loading, Cortex LLM)</li>
-      <li><strong>Version Control:</strong> Git, GitHub Workflows</li>
-    </ul>
-  </div>
-</div>
 
 <!-- 2. 최신 게시글 섹션 -->
 <h2 style="margin-top: 0; margin-bottom: 1.5rem;">Recent Posts</h2>
