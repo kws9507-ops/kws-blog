@@ -1,0 +1,18 @@
+---
+# Custom CSS for Minimal Mistakes
+---
+@import "minimal-mistakes/skins/{{ site.minimal_mistakes_skin | default: 'default' }}";
+@import "minimal-mistakes";
+/* 상단 메뉴 개별 색상 지정 */
+.masthead__menu-item a[href*="/categories/oracle/"] {
+  color: red !important;
+  font-weight: bold;
+}
+.masthead__menu-item a[href*="/categories/shareplex/"] {
+  color: orange !important;
+  font-weight: bold;
+}
+.masthead__menu-item a[href*="/categories/snowflake/"] {
+  color: #00a8e8 !important; /* 하늘색 */
+  font-weight: bold;
+}
