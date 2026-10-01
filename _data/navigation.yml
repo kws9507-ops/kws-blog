@@ -1,7 +1,7 @@
 main:
-  - title: "Git"
+  - title: "<span style='font-weight: bold;'>Git</span>"
     url: /categories/git/
-  - title: "Linux"
+  - title: "<span style='font-weight: bold;'>Linux</span>"
     url: /categories/linux/
   - title: "<span style='color: red; font-weight: bold;'>Oracle</span>"
     url: /categories/oracle/
