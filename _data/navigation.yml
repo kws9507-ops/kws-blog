@@ -3,9 +3,9 @@ main:
     url: /categories/git/
   - title: "Linux"
     url: /categories/linux/
-  - title: "Oracle"
+  - title: "<span style='color: red; font-weight: bold;'>Oracle</span>"
     url: /categories/oracle/
-  - title: "SharePlex"
+  - title: "<span style='color: orange; font-weight: bold;'>SharePlex</span>"
     url: /categories/shareplex/
-  - title: "Snowflake"
+  - title: "<span style='color: #00a8e8; font-weight: bold;'>Snowflake</span>"
     url: /categories/snowflake/
