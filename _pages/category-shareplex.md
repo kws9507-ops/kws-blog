@@ -1,5 +1,5 @@
 ---
-title: "SharePlex"
+title: "<span style='color: orange;'>SharePlex</span>"
 layout: single
 permalink: /categories/shareplex/
 author_profile: false
