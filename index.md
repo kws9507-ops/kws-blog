@@ -15,7 +15,7 @@ author_profile: false
   </p>
 
   <!-- 학력 및 경력 타임라인 -->
-  <div style="margin-bottom: 1.2rem;">
+  <div style="margin-bottom: 0;">
     <h3 style="font-size: 0.95rem; margin-top: 0; margin-bottom: 0.5rem; color: #495057;">🎓 Education & Work Experience</h3>
     <ul style="font-size: 0.9rem; color: #495057; padding-left: 1.2rem; margin-bottom: 0; line-height: 1.7;">
       <li><strong>바이텍정보통신</strong> (2025.11 ~ 재직 중)</li>
@@ -23,10 +23,10 @@ author_profile: false
       <li><strong>강원대학교</strong> 졸업 (2021)</li>
     </ul>
   </div>
-
+</div>
 
 <!-- 2. 최신 게시글 섹션 -->
-<h2 style="margin-top: 0; margin-bottom: 1.5rem;">Recent Posts</h2>
+<h2 style="margin-top: 0; margin-bottom: 1.5rem;">📑 Recent Posts</h2>
 
 {% if site.posts.size > 0 %}
   {% for post in site.posts limit:10 %}
