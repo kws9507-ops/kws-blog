@@ -19,7 +19,7 @@ markdown: kramdown
 highlighter: rouge
 
 search: true
-breadcrumbs: true
+breadcrumbs: false
 
 paginate: 10
 paginate_path: /page:num/
