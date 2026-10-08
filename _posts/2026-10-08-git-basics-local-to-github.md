@@ -1,3 +1,15 @@
+---
+title: "[Git] Git 기초 - 로컬 저장소에서 GitHub까지"
+date: 2026-10-08 10:00:00 +0900
+categories:
+  - Git
+tags:
+  - Git
+  - GitHub
+  - VersionControl
+  - Basics
+---
+
 # Git 기초 - 로컬 저장소에서 GitHub까지
 
 Git과 GitHub를 처음 사용하면서 진행한 과정을 정리한다.
