@@ -52,11 +52,6 @@ author_profile: false
         {% endfor %}
       {% endif %}
     </p>
-    {% if post.excerpt %}
-      <p class="archive__item-excerpt" itemprop="description" style="font-size: 0.9rem; color: #444; margin-bottom: 0;">
-        {{ post.excerpt | strip_html | truncate: 160 }}
-      </p>
-    {% endif %}
   </article>
 </div>
 <hr style="margin: 1.2rem 0; border: 0; border-top: 1px solid #eee;">
