@@ -1,7 +1,7 @@
 ---
 title: "Linux"
 layout: archive
-permalink: /categories/linux/
+permalink: /categories/Linux/
 author_profile: false
 ---
 
