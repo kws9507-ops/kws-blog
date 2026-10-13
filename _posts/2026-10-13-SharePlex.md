@@ -60,18 +60,7 @@ Target DB (Oracle)
 
 ---
 
-# 2. 설치 사전 준비 사항
-
-SharePlex를 설치하기 전에 다음 사항들을 확인해야 한다.
-
-- 오라클 데이터베이스가 정상적으로 설치 및 구동 중인지 확인
-- SharePlex 전용 OS 계정(예: `splex`) 생성
-- 필요한 환경 변수(`ORACLE_HOME`, `ORACLE_SID` 등) 설정
-- 설치 파일 확보 및 권한 설정
-
----
-
-# 3. SharePlex 전용 OS 계정 생성
+# 2. SharePlex 전용 OS 계정 생성
 
 SharePlex는 보안과 관리를 위해 별도의 OS 계정으로 실행하는 것이 권장된다.
 
