@@ -31,7 +31,23 @@ Source DB (Oracle)
   ▼
 SharePlex Capture
   │
-  │ Queue 전송
+  │ Export Queue에 데이터 저장
+  ▼
+SharePlex Read
+  │
+  │ Queue에서 데이터 읽기
+  ▼
+SharePlex Export
+  │
+  │ 네트워크를 통한 데이터 전송
+  ▼
+SharePlex Import
+  │
+  │ 수신 데이터 전달
+  ▼
+Post Queue
+  │
+  │ Queue에서 데이터 읽기
   ▼
 SharePlex Post
   │
