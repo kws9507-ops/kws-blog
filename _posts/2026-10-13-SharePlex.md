@@ -30,7 +30,7 @@ usermod -g oinstall -G dba splex
 id splex 확인
 ```
 
-### 1.2 .bash_profile 수정 **[Source / Target 공통]**
+## 1.2 .bash_profile 수정 **[Source / Target 공통]**
 SharePlex 실행에 필요한 환경 변수(`SP_SYS_KEY`, `PATH` 등) 및 Oracle 환경 변수를 설정합니다.
 
 ```bash
