@@ -35,12 +35,19 @@ SharePlex 실행에 필요한 환경 변수(`SP_SYS_KEY`, `PATH` 등) 및 Oracle
 
 ```bash
 # /home/splex/.bash_profile에 추가
-export ORACLE_BASE=/u01/app/oracle
-export ORACLE_HOME=$ORACLE_BASE/product/19.0.0/dbhome_1
-export ORACLE_SID=ORCL
+export 오라클 계정과 동일
+export SP_SYS_PRODDIR=/home/splex/splex/prod
+export SP_SYS_VARDIR=/home/splex/splex/var
+export SP_SYS_BINDIR=/home/splex/splex/prod/bin
+export SP_SYS_HOST_NAME=rac1-vip
+export SP_COP_TPORT=2100
+export SP_COP_UPORT=2100
+alias spbin='cd /home/splex/splex/prod/bin'
+alias spvar='cd /home/splex/splex/var'
+alias splog='cd /home/splex/splex/var/log'
+alias sp='/home/splex/splex/prod/bin/sp_ctrl'
 
-export SP_COP_DIR=/splex/vardir
-export PATH=$ORACLE_HOME/bin:$PATH:/splex/proddir/bin
+. .bash_profile
 ```
 
 ### 1.3 /etc/hosts 설정 **[Source / Target 공통]**
