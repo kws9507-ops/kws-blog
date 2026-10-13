@@ -1,11 +1,11 @@
 main:
   - title: "<span style='font-weight: bold;'>Git</span>"
-    url: /categories/git/
+    url: /categories/Git/
   - title: "<span style='font-weight: bold;'>Linux</span>"
-    url: /categories/linux/
+    url: /categories/Linux/
   - title: "<span style='color: red; font-weight: bold;'>Oracle</span>"
-    url: /categories/oracle/
+    url: /categories/Oracle/
   - title: "<span style='color: orange; font-weight: bold;'>SharePlex</span>"
-    url: /categories/shareplex/
+    url: /categories/SharePlex/
   - title: "<span style='color: #00a8e8; font-weight: bold;'>Snowflake</span>"
-    url: /categories/snowflake/
+    url: /categories/Snowflake/
