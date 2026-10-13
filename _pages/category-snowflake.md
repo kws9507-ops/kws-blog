@@ -1,7 +1,7 @@
 ---
 title: "<span style='color: #00a8e8;'>Snowflake</span>"
 layout: single
-permalink: /categories/snowflake/
+permalink: /categories/Snowflake/
 author_profile: false
 ---
 
