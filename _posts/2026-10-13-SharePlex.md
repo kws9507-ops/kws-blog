@@ -50,32 +50,35 @@ alias sp='/home/splex/splex/prod/bin/sp_ctrl'
 . .bash_profile
 ```
 
-### 1.3 /etc/hosts 설정 **[Source / Target 공통]**
+## 1.3 /etc/hosts 설정 **[Source / Target 공통]**
 클러스터 환경 또는 네트워크 통신을 위해 호스트 이름과 IP 주소를 정확히 매핑합니다.
 
 ```text
 # /etc/hosts 예시
+ip              hostname
 192.168.1.100   db-source
 192.168.1.101   db-target
 ```
 
-### 1.4 /etc/oratab 설정 **[Source / Target 공통]**
+## 1.4 /etc/oratab 설정 **[Source / Target 공통]**
 인스턴스 자동 기동 및 Oracle 홈 디렉터리 인식을 위해 `/etc/oratab` 파일을 확인하고 설정합니다.
 
 ```text
 # /etc/oratab 예시
-ORCL:/u01/app/oracle/product/19.0.0/dbhome_1:Y
+Oracle SID:/u01/app/oracle/product/19.0.0/dbhome_1:N
 ```
 
-### 1.5 SharePlex OS User의 ulimit 설정 **[Source / Target 공통]**
+## 1.5 SharePlex OS User의 ulimit 설정 **[Source / Target 공통]**
 SharePlex가 원활히 동작할 수 있도록 OS 리소스 제한 설정을 변경합니다.
 
 ```ini
 # /etc/security/limits.conf 설정 예시
-splex   soft    nofile    65536
-splex   hard    nofile    65536
-splex   soft    nproc     16384
-splex   hard    nproc     16384
+splex            soft    nproc           2048
+splex            hard    nproc           16384
+splex            soft    nofile          1024
+splex            hard    nofile          65536
+splex            soft    core            1500000
+splex            hard    core            1500000
 ```
 
 ---
