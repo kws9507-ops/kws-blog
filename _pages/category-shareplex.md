@@ -1,7 +1,7 @@
 ---
 title: "SharePlex"
 layout: archive
-permalink: /categories/shareplex/
+permalink: /categories/SharePlex/
 author_profile: false
 ---
 
