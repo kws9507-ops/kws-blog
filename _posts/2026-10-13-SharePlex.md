@@ -1,27 +1,33 @@
 ---
-title: "Oracle Database 환경에서 Quest SharePlex 설치 및 초기 설정 가이드"
-date: 2026-10-13
-categories: [Database, SharePlex]
-tags: [SharePlex, Oracle, Replication, Database Administration]
-description: "Oracle 환경에서 Quest SharePlex 데이터베이스 실시간 복제 솔루션을 설치하고 구성하기 위한 단계별 가이드입니다."
+title: "[SharePlex] SharePlex 설치 및 기본 설정 가이드"
+date: 2026-10-13 10:00:00 +0900
+categories:
+  - SharePlex
+tags:
+  - SharePlex
+  - Oracle
+  - Replication
+  - Database
 ---
 
 Oracle Database 환경에서 데이터 실시간 복제(Replication)를 구현하기 위한 **Quest SharePlex** 설치 및 초기 구성 가이드입니다. OS 설정부터 DB 설정, 그리고 SharePlex 본 설치까지의 전 과정을 다루며, 각 작업이 수행되는 위치(**Source** 또는 **Target**)를 함께 표기하였습니다.
 
 ---
 
-## 1. OS 설정
+# 1. OS 설정
 
 SharePlex를 구동하기 위한 운영체제 레벨의 사전 준비 작업입니다. (소스 및 타겟 서버 양쪽 모두 수행 필요)
 
-### 1.1 SharePlex 계정 생성 및 관리 **[Source / Target 공통]**
+## 1.1 SharePlex 계정 생성 및 관리 **[Source / Target 공통]**
 SharePlex 데몬 및 프로세스를 실행할 전용 OS 계정을 생성합니다. 보안 및 권한 분리를 위해 일반 사용자 계정과 분리하는 것이 좋습니다.
 
 ```bash
-# splex 계정 생성 예시 (OS별 명령어 상이할 수 있음)
-groupadd splex
-useradd -g splex -m -d /home/splex -s /bin/bash splex
+# splex 계정 생성 예시
+useradd splex
 passwd splex
+id oracle 확인
+usermod -g oinstall -G dba splex
+id splex 확인
 ```
 
 ### 1.2 .bash_profile 수정 **[Source / Target 공통]**
