@@ -1,7 +1,7 @@
 ---
 title: "<span style='color: red;'>Oracle</span>"
 layout: single
-permalink: /categories/oracle/
+permalink: /categories/Oracle/
 author_profile: false
 ---
 
