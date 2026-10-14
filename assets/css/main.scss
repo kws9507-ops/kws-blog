@@ -42,3 +42,12 @@ a.site-title {
   text-align: left !important;
   margin-bottom: 1rem !important;
 }
+
+/* 4. SharePlex 카테고리 게시글 제목 굵기 통일 */
+.archive__item-title {
+  font-weight: 400 !important;
+}
+
+.archive__item-title a {
+  font-weight: 400 !important;
+}
