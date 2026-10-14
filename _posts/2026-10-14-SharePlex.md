@@ -1,14 +1,13 @@
 ---
 title: "[SharePlex] Object Cache 파일에서 테이블 목록 추출하기"
-date: 2026-10-14 11:00:00 +0900
+date: 2026-10-14 10:00:00 +0900
 categories:
   - SharePlex
 tags:
   - SharePlex
   - Oracle
-  - Linux
-  - Troubleshooting
-  - ObjectCache
+  - Replication
+  - Database
 ---
 
 SharePlex 운영 및 장애 분석 과정에서 Object Cache 파일에 저장된 정보를 확인해야 하는 경우가 있다.
