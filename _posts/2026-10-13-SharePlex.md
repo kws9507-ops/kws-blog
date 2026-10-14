@@ -154,34 +154,26 @@ select supplemental_log_data_pk from v$database;
 
 실제 SharePlex 바이너리를 설치하고 초기 구성을 완료하는 단계입니다.
 
-### 3.1 설치 경로 생성 **[Source / Target 공통]**
-SharePlex 프로그램 디렉터리와 가변 데이터 디렉터리(`vardir`)를 생성합니다.
+## 3.1 설치 경로 생성 **[Source / Target 공통]**
 
 ```bash
-mkdir -p /splex/proddir
-mkdir -p /splex/vardir
-chown -R splex:splex /splex
+mkdir -p /home/splex/splex/prod
+mkdir -p /home/splex/splex/var
+chown -R splex:oinstall /home/splex
 ```
 
-### 3.2 SharePlex 설치 **[Source / Target 공통]**
-다운로드한 SharePlex 설치 파일을 실행하여 설치를 진행합니다.
+## 3.2 SharePlex 설치 **[Source / Target 공통]**
 
 ```bash
-# 설치 파일 실행 예시
-./SharePlex_Installer.bin
+chown splex:oinstall SharePlex-12.0.0-b1-rhel-amd64-m64.tpm
+chmod 755 SharePlex-12.0.0-b1-rhel-amd64-m64.tpm
+./SharePlex-12.0.0-b1-rhel-amd64-m64.tpm
 ```
-* 설치 마법사 지시에 따라 제품 디렉터리 및 가변 디렉터리 경로를 지정합니다.
 
-### 3.3 ora.setup **[Source / Target 공통]**
-설치 완료 후 Oracle 데이터베이스와 SharePlex를 연동하기 위한 설정 스크립트를 실행합니다.
+## 3.3 ora.setup **[Source / Target 공통]**
 
 ```bash
 # vardir 디렉터리 이동 후 설정 스크립트 실행
-cd /splex/vardir
+spbin
 ./ora.setup
 ```
-* 프롬프트에 따라 Oracle Home 경로, TNS 이름, SharePlex 전용 DB 계정 정보를 입력하여 구성을 완료합니다.
-
----
-
-> **참고:** 설치 완료 후 `sp_cop &` 명령어를 통해 각 서버에서 SharePlex 프로세스를 백그라운드로 실행하고, `sp_ctrl` 유틸리티를 통해 정상 구동 여부를 확인할 수 있습니다.
