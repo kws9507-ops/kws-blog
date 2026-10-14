@@ -87,11 +87,11 @@ splex            hard    core            1500000
 
 SharePlex가 데이터베이스와 연동하여 동작할 수 있도록 데이터베이스 내부 설정을 구성합니다.
 
-### 2.1 TNS 설정 **[Source / Target 공통]**
+## 2.1 TNS 설정 **[Source / Target 공통]**
 소스와 타겟 간 원활한 접속(양방향 또는 네트워킹)을 위해 `tnsnames.ora` 파일을 구성합니다.
 
 ```text
-ORCL =
+SPLEX =
   (DESCRIPTION =
     (ADDRESS = (PROTOCOL = TCP)(HOST = db-source)(PORT = 1521))
     (CONNECT_DATA =
@@ -101,7 +101,7 @@ ORCL =
   )
 ```
 
-### 2.2 SharePlex TableSpace 생성 **[Source / Target 공통]**
+## 2.2 SharePlex TableSpace 생성 **[Source / Target 공통]**
 SharePlex 메타데이터 및 큐(Queue) 관리를 위한 전용 테이블스페이스를 생성합니다.
 
 ```sql
@@ -110,7 +110,7 @@ DATAFILE '/u01/app/oracle/oradata/ORCL/splex_ts01.dbf' SIZE 2G
 AUTOEXTEND ON NEXT 500M MAXSIZE UNLIMITED;
 ```
 
-### 2.3 SharePlex Oracle 계정 생성 및 권한 부여 **[Source / Target 공통]**
+## 2.3 SharePlex Oracle 계정 생성 및 권한 부여 **[Source / Target 공통]**
 복제 작업을 수행할 전용 데이터베이스 사용자를 생성하고 필요한 권한을 부여합니다.
 
 ```sql
@@ -118,36 +118,39 @@ CREATE USER splex IDENTIFIED BY password
 DEFAULT TABLESPACE splex_ts 
 TEMPORARY TABLESPACE temp;
 
-GRANT CONNECT, RESOURCE TO splex;
-GRANT SELECT ANY DICTIONARY TO splex;
+GRANT dba to splex;
+GRANT SELECT ON SYS.USER$ to splex;
 -- 추가적인 필수 권한 부여 (버전에 따라 상이할 수 있음)
 ```
 
-### 2.4 Parameter 확인 및 설정 **[Source / Target 공통]**
+## 2.4 Parameter 확인 및 설정 **[Source / Target 공통]**
 Oracle 아카이브 로그 모드 및 SharePlex 구동에 필요한 데이터베이스 파라미터를 점검합니다.
 
 ```sql
 -- 아카이브 로그 모드 확인
 ARCHIVE LOG LIST;
-
 -- 필요 시 아카이브 모드 전환 (MOUNT 단계에서 수행)
 -- ALTER DATABASE ARCHIVELOG;
+
+--Source
+SELECT NAME,VALUE from v$parameter where name = 'recovery_parallelism';
+=> 0
+--Target
+SELECT name, value FROM v$parameter WHERE name LIKE 'job%';
+ALTER SYSTEM SET job_queue_processes = 0 SCOPE=BOTH;
 ```
 
-### 2.5 Supplemental logging 설정 **[Source 전용]**
-> ⚠️ **참고:** Supplemental Logging은 기본적으로 변경 데이터를 캡처해야 하는 **Source DB** 측에 설정합니다. (단, 타겟 측에서 향후 리버스(Reverse) 복제나 충돌 해결 등을 고려한다면 타겟에도 설정할 수 있습니다.)
+## 2.5 Supplemental logging 설정 **[Source / Target 공통]**
 
 ```sql
--- 최소 Supplemental Logging 설정
-ALTER DATABASE ADD SUPPLEMENTAL LOG DATA;
-
--- 특정 테이블에 대한 Supplemental Logging 설정 예시
-ALTER TABLE schema.table ADD SUPPLEMENTAL LOG DATA (ALL) COLUMNS;
+select supplemental_log_data_pk from v$database;
+ALTER DATABASE ADD SUPPLEMENTAL LOG DATA (PRIMARY KEY,UNIQUE) COLUMNS;
+select supplemental_log_data_pk from v$database;
 ```
 
 ---
 
-## 3. SharePlex 설치
+# 3. SharePlex 설치
 
 실제 SharePlex 바이너리를 설치하고 초기 구성을 완료하는 단계입니다.
 
