@@ -1,0 +1,187 @@
+# Rocky Linux 9.6 환경 Oracle Database 19.3 설치 가이드 및 트러블슈팅
+
+Rocky Linux 9 (9.6) GUI 환경에서 Oracle Database 19c(19.3)를 설치할 때 마주치는 대표적인 이슈와 이를 해결하기 위한 RPM 패키지 설치 방법을 정리한 블로그 포스팅 초안입니다.
+
+---
+
+## 1. 개요 및 테스트 환경
+
+* **OS**: Rocky Linux 9.6 (Server with GUI)
+* **Database**: Oracle Database 19c (19.3 설치 후 19.27 패치 적용)
+
+Oracle Database 19c는 공식 문서상으로 RHEL/Rocky Linux 8 및 9 버전을 지원한다고 명시되어 있습니다. 하지만 실제 바이너리(ZIP)로 설치를 진행해보면 라이브러리 패키지 누락 및 링크 오류(`libasmclntsh19.ohso`, `libasmperl19.ohso`, `client_sharedlib` 등)로 인해 정상적인 설치가 어려운 문제가 발생합니다.
+
+---
+
+## 2. 주요 설치 이슈 및 원인
+
+Rocky Linux 9 환경에서 표준 바이너리(ZIP)로 설치 시 발생하는 대표적인 증상은 다음과 같습니다.
+
+* **필수 패키지 및 라이브러리 누락**으로 인한 사전 검사 실패
+* **`libasmclntsh19.ohso` 및 `libasmperl19.ohso` 관련 링크 에러**
+* **`client_sharedlib` 빌드 오류**
+
+이러한 호환성 문제를 우회하고 성공적으로 구축하기 위해 일반적으로 아래의 두 가지 방법 중 하나를 선택해야 합니다.
+
+---
+
+## 3. 설치 방법 비교 (RPM vs 패치 적용)
+
+상황과 요구사항에 따라 적절한 설치 방식을 선택하는 것이 중요합니다.
+
+| 구분 | 방법 1: RPM 패키지 설치 | 방법 2: ZIP 바이너리 + OPatch/DBRU 업데이트 |
+| :--- | :--- | :--- |
+| **설치 방식** | YUM/DNF를 이용한 RPM 설치 | 전통적인 `runInstaller` 후 패치 적용 |
+| **설치 경로** | `/opt/oracle`로 고정 (변경 불가) | 사용자 정의 경로 지정 가능 |
+| **에디션 제한** | **Enterprise Edition (EE)** 전용 | Enterprise Edition 및 **Standard Edition (SE2)** 모두 가능 |
+| **권장 대상** | 경로 및 에디션 제약이 없고 빠른 설치가 필요할 때 | 특정 경로 지정이 필요하거나 Standard Edition을 써야 할 때 |
+
+### 💡 추천 가이드
+* **경로와 에디션에 특별한 제약이 없다면:** 복잡한 패키지 오류를 줄일 수 있는 **RPM 설치 방식**을 권장합니다.
+* **특정 디렉토리 구조를 유지해야 하거나 Standard Edition이 필요하다면:** 바이너리 설치 후 **OPatch와 DBRU(Database Release Update)를 즉시 적용**하는 두 번째 방식을 사용해야 합니다.
+
+---
+
+## 4. 방법 1: RPM 패키지를 이용한 설치
+
+경로와 에디션(Enterprise Edition 고정)에 제약이 없다면, RPM 패키지를 이용하는 것이 가장 빠르고 간편합니다.
+
+### 4.1. 다운로드
+* **Oracle Database 19c RPM 패키지**: 아래 공식 다운로드 경로 중 편한 곳에서 다운로드합니다. (설치 시 **Enterprise Edition**으로 자동 설치되므로 주의)
+  * [Oracle Database 소프트웨어 다운로드](https://www.oracle.com/kr/database/technologies/oracle-database-software-downloads.html)
+  * [Oracle 19c Linux 다운로드](https://www.oracle.com/database/technologies/oracle19c-linux-downloads.html)
+
+* **Oracle Preinstall 패키지**: 
+  Oracle Linux 레포지토리에 기본 포함된 preinstall 패키지는 RHEL/Rocky 환경에서는 수동으로 다운로드하여 사용해야 합니다. 이 패키지는 오라클 설치에 필요한 시스템 설정을 자동으로 처리해 주어 매우 편리합니다.
+  * [Oracle Linux 9 AppStream Repositories](https://yum.oracle.com/repo/OracleLinux/OL9/appstream/x86_64/index.html) 링크에서 최신 버전을 다운로드하거나, 예시 버전(`oracle-database-preinstall-19c-1.0-2.el9.x86_64.rpm` 등)을 직접 받습니다.
+
+### 4.2. Preinstall 패키지가 자동으로 수행해 주는 작업
+`oracle-database-preinstall-19c` 패키지를 설치하면 수동으로 설정하기 번거로운 아래 항목들을 알아서 구성해 줍니다.
+* 오라클 전용 시스템 사용자 및 그룹 생성 (`oracle` 계정 등)
+* 투명 대형 페이지(Transparent Huge Pages, THP) 비활성화
+* 시스템 리소스 제한 (`limits`) 설정
+* 커널 파라미터 (`sysctl.conf`) 설정
+
+### 4.3. 사전 시스템 설정 (SELinux 및 방화벽)
+패키지를 모두 다운로드했다면 설치를 진행하기 전, 시스템 환경에 걸림돌이 될 수 있는 보안 및 방화벽 설정을 조정합니다.
+
+* **SELinux 설정**: 비활성화(`disabled`) 또는 허용(`permissive`) 상태로 설정합니다.
+* **방화벽 설정 (`firewalld`)**: 비활성화(`disabled`) 처리합니다.
+
+> 💡 **참고**: 보안 정책상 SELinux와 방화벽을 직접 세밀하게 설정하여 사용해도 무방하지만, 설치 과정 및 테스트의 편의를 위해 위와 같이 비활성화/완화 후 진행하는 것을 기준으로 합니다.
+
+---
+
+### 4.4. 사전 패키지 설치 및 시스템 재부팅
+
+다운로드한 `oracle-database-preinstall` 패키지를 먼저 설치하여 필수 시스템 설정을 자동으로 구성합니다. 이 작업은 `root` 권한으로 진행해야 합니다.
+
+```bash
+[root@oracle1 ~]# dnf localinstall oracle-database-preinstall-19c-1.0-1.el9.x86_64.rpm
+```
+
+설치 완료 후 `oracle` 계정의 패스워드를 설정하고 시스템을 재부팅합니다.
+
+```bash
+[root@oracle1 ~]# passwd oracle
+Changing password for user oracle.
+New password: 
+Retype new password: 
+passwd: all authentication tokens updated successfully.
+
+[root@oracle1 ~]# reboot
+```
+
+---
+
+### 4.5. Oracle Database 19c RPM 패키지 설치
+
+미리 다운로드한 오라클 데이터베이스 본 패키지를 로컬 설치합니다. 이 과정 역시 `root` 권한으로 진행됩니다.
+
+```bash
+[root@oracle1 ~]# dnf localinstall oracle-database-ee-19c-1.0-1.x86_64.rpm
+```
+
+설치가 완료되면 `[INFO] Oracle home installed successfully and ready to be configured.` 메시지와 함께 `Complete!`가 표시됩니다.
+
+---
+
+### 4.6. 데이터베이스 환경 설정 파일 확인 및 수정
+
+패키지 설치가 완료되면, 데이터베이스 초기화 전에 환경 설정 파일의 내용을 확인합니다. 기본값으로 진행해도 무방하지만, 필요에 따라 포트 번호나 데이터 저장 경로를 조정할 수 있습니다.
+
+* **파일 경로**: `/etc/sysconfig/oracledb_ORCLCDB-19c.conf`
+
+```text
+#This is a configuration file to setup the Oracle Database. 
+#It is used when running '/etc/init.d/oracledb_ORCLCDB configure'.
+#Please use this file to modify the default listener port and the
+#Oracle data location.
+
+# LISTENER_PORT: Database listener
+LISTENER_PORT=1521
+
+# ORACLE_DATA_LOCATION: Database oradata location
+ORACLE_DATA_LOCATION=/opt/oracle/oradata
+
+# EM_EXPRESS_PORT: Oracle EM Express listener
+EM_EXPRESS_PORT=5500
+```
+
+---
+
+### 4.7. 데이터베이스 구성 및 초기화 실행
+
+설정 검토가 끝났다면 데이터베이스 인스턴스를 생성하고 초기화하는 구성 스크립트를 실행합니다.
+
+```bash
+[root@oracle1 ~]# /etc/init.d/oracledb_ORCLCDB-19c configure
+```
+
+정상적으로 완료되면 마지막에 `Database configuration completed successfully.` 메시지가 출력됩니다.
+
+---
+
+### 4.8. 데이터베이스 환경 변수 설정 및 구동 확인
+
+설치가 끝났으면 `oracle` 계정으로 전환하여 환경 변수를 설정하고 구동 상태를 확인합니다.
+
+```bash
+[root@oracle1 ~]# su - oracle
+[oracle@oracle1 ~]$ vim .bashrc 
+```
+
+`.bashrc` 파일 하단에 아래 내용을 입력합니다.
+> ⚠️ **주의**: `ORACLE_BASE` 경로 지정 시 **맨 뒤에 슬래시(`/`)가 들어가면 안 됩니다.**
+
+```bash
+export ORACLE_BASE=/opt/oracle                            
+export ORACLE_HOME=$ORACLE_BASE/product/19c/dbhome_1
+export ORACLE_SID=ORCLCDB
+export PATH=$ORACLE_HOME/bin:$PATH
+```
+
+환경 변수 적용 후 SQL*Plus로 접속을 테스트합니다.
+
+```bash
+[oracle@oracle1 ~]$ source .bashrc
+[oracle@oracle1 ~]$ sqlplus / as sysdba
+```
+
+데이터베이스 버전 정보를 확인합니다.
+
+```sql
+SQL> SELECT banner FROM v$version;
+```
+
+SQL*Plus를 종료한 뒤 리스너 상태를 확인합니다.
+
+```sql
+SQL> exit
+```
+
+```bash
+[oracle@oracle1 ~]$ lsnrctl status
+```
+
+리스너 상태가 `ready`이며 `ORCLCDB`, `orclpdb1` 서비스가 정상적으로 등록되어 있는지 확인합니다. 설치 종료!
