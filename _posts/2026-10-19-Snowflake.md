@@ -10,7 +10,7 @@ tags:
 
 > Cortex Analyst(시맨틱 뷰)만으로는 어려운 **t검정과 p-value 계산**을 Python 저장 프로시저로 구현해, Snowflake CoWork 에이전트의 커스텀 도구로 쓸 수 있게 만드는 과정을 정리했습니다.
 
-## 목차
+# 목차
 1. [왜 커스텀 도구가 필요한가](#1-왜-커스텀-도구가-필요한가)
 2. [전체 구성](#2-전체-구성)
 3. [샘플 데이터 만들기](#3-샘플-데이터-만들기)
@@ -43,8 +43,8 @@ t검정은 상황이 다릅니다.
 
 ```
 KWS_DB
-└── T_TEST (schema)
-    ├── SAMPLE_AB_TEST   -- 테스트용 샘플 테이블
+└── STATISTICS (schema)
+    ├── SAMPLE_TTEST     -- 테스트용 샘플 테이블
     └── RUN_TTEST(...)   -- t검정 Python 저장 프로시저 (VARIANT 반환)
 ```
 
@@ -61,7 +61,7 @@ KWS_DB
 스키마는 다음과 같이 만듭니다.
 
 ```sql
-CREATE SCHEMA IF NOT EXISTS KWS_DB.T_TEST;
+CREATE SCHEMA IF NOT EXISTS KWS_DB.STATISTICS;
 ```
 
 # 3. 샘플 데이터 만들기
@@ -105,7 +105,7 @@ CREATE SCHEMA IF NOT EXISTS KWS_DB.T_TEST;
 ## 3.4 생성 SQL
 
 ```sql
-CREATE OR REPLACE TABLE KWS_DB.T_TEST.SAMPLE_AB_TEST AS
+CREATE OR REPLACE TABLE KWS_DB.STATISTICS.SAMPLE_TTEST AS
 WITH c AS (
   SELECT SEQ4() + 1 AS CUSTOMER_ID,
          IFF(UNIFORM(0, 1, RANDOM()) = 0, 'A', 'B') AS AB_GROUP
@@ -169,7 +169,7 @@ FROM c;
 ## 4.4 전체 코드
 
 ```sql
-CREATE OR REPLACE PROCEDURE KWS_DB.T_TEST.RUN_TTEST(
+CREATE OR REPLACE PROCEDURE KWS_DB.STATISTICS.RUN_TTEST(
     TABLE_NAME   VARCHAR,
     VALUE_COL    VARCHAR,
     TEST_TYPE    VARCHAR DEFAULT 'independent',
@@ -214,7 +214,7 @@ def _f(x):
     if x is None:
         return None
     x = float(x)
-    return None if math.isnan(x) or math.isinf(x) else round(x, 6)
+    return None if math.isnan(x) or math.isinf(x) else float(f'{x:.6g}')
 
 
 def _desc(a):
@@ -378,8 +378,8 @@ $$;
 ## 5.1 독립표본 t검정: 프로모션 후 A그룹 vs B그룹
 
 ```sql
-CALL KWS_DB.T_TEST.RUN_TTEST(
-  TABLE_NAME => 'KWS_DB.T_TEST.SAMPLE_AB_TEST', VALUE_COL => 'PURCHASE_AMT',
+CALL KWS_DB.STATISTICS.RUN_TTEST(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_TTEST', VALUE_COL => 'PURCHASE_AMT',
   TEST_TYPE => 'independent', GROUP_COL => 'AB_GROUP', GROUP_A => 'A', GROUP_B => 'B',
   FILTER_COL => 'PERIOD', FILTER_VALUE => 'AFTER');
 ```
@@ -389,7 +389,8 @@ CALL KWS_DB.T_TEST.RUN_TTEST(
 | 평균 (A / B) | 51,323 / 56,723 |
 | 평균 차이 (A − B) | −5,400 (95% CI: −8,188 ~ −2,613) |
 | Levene p-value | 0.024 → 등분산 가정 기각, **Welch 권장** |
-| Welch t / df / p | −3.82 / 187.2 / 0.00018 |
+| Welch t / df / p | −3.82 / 187.2 / 0.000180 |
+| (참고) Student t / df / p | −3.82 / 198 / 0.000177 |
 | Cohen's d | −0.54 (중간 정도 효과) |
 | 정규성 p (A / B) | 0.65 / 0.26 → 정규성 가정 만족 |
 | 판정 | **유의함** |
@@ -399,8 +400,8 @@ CALL KWS_DB.T_TEST.RUN_TTEST(
 ## 5.2 대응표본 t검정: 같은 고객의 프로모션 전 vs 후
 
 ```sql
-CALL KWS_DB.T_TEST.RUN_TTEST(
-  TABLE_NAME => 'KWS_DB.T_TEST.SAMPLE_AB_TEST', VALUE_COL => 'PURCHASE_AMT',
+CALL KWS_DB.STATISTICS.RUN_TTEST(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_TTEST', VALUE_COL => 'PURCHASE_AMT',
   TEST_TYPE => 'paired', GROUP_COL => 'PERIOD', GROUP_A => 'AFTER', GROUP_B => 'BEFORE',
   PAIR_ID_COL => 'CUSTOMER_ID');
 ```
@@ -410,7 +411,7 @@ CALL KWS_DB.T_TEST.RUN_TTEST(
 | 쌍 개수 | 200 |
 | 평균 (AFTER / BEFORE) | 54,023 / 49,023 |
 | 평균 차이 (AFTER − BEFORE) | +5,000 (95% CI: 2,934 ~ 7,066) |
-| t / df / p | 4.77 / 199 / 0.000004 |
+| t / df / p | 4.77 / 199 / 3.52 × 10⁻⁶ |
 | Cohen's dz | 0.34 |
 | 차이값 정규성 p | 0.83 |
 | 판정 | **유의함** |
@@ -420,8 +421,8 @@ CALL KWS_DB.T_TEST.RUN_TTEST(
 ## 5.3 일표본 t검정: 프로모션 전 평균이 50,000원인가
 
 ```sql
-CALL KWS_DB.T_TEST.RUN_TTEST(
-  TABLE_NAME => 'KWS_DB.T_TEST.SAMPLE_AB_TEST', VALUE_COL => 'PURCHASE_AMT',
+CALL KWS_DB.STATISTICS.RUN_TTEST(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_TTEST', VALUE_COL => 'PURCHASE_AMT',
   TEST_TYPE => 'one_sample', MU0 => 50000,
   FILTER_COL => 'PERIOD', FILTER_VALUE => 'BEFORE');
 ```
@@ -438,10 +439,10 @@ CALL KWS_DB.T_TEST.RUN_TTEST(
 ## 5.4 잘못된 입력 처리
 
 ```sql
-CALL KWS_DB.T_TEST.RUN_TTEST(
-  TABLE_NAME => 'KWS_DB.T_TEST.SAMPLE_AB_TEST; DROP TABLE X',
+CALL KWS_DB.STATISTICS.RUN_TTEST(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_TTEST; DROP TABLE X',
   VALUE_COL => 'PURCHASE_AMT', TEST_TYPE => 'one_sample');
--- {"error": "invalid TABLE_NAME: KWS_DB.T_TEST.SAMPLE_AB_TEST; DROP TABLE X"}
+-- {"error": "invalid TABLE_NAME: KWS_DB.STATISTICS.SAMPLE_TTEST; DROP TABLE X"}
 ```
 
 식별자 검증에서 걸러지므로 쿼리는 실행되지 않고 오류 메시지만 반환됩니다.
