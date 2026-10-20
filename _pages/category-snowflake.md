@@ -16,7 +16,6 @@ author_profile: false
   <p class="page__meta" style="font-size: 0.8rem; color: #888; margin-bottom: 0.5rem;">
     <i class="far fa-calendar-alt"></i> {{ post.date | date: "%Y-%m-%d" }}
   </p>
-  {% endif %}
 </article>
 <hr style="margin: 1.5rem 0;">
 {% endfor %}
