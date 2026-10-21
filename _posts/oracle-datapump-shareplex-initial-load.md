@@ -1,0 +1,256 @@
+---
+title: "Oracle Data Pump를 이용한 SharePlex 초기 적재"
+date: 2026-10-21
+categories: [Oracle, SharePlex]
+tags: [Oracle, Data Pump, expdp, impdp, 초기적재, SharePlex]
+---
+
+# Oracle Data Pump를 이용한 SharePlex 초기 적재
+
+Oracle Data Pump의 `expdp`와 `impdp`를 이용해 소스 DB의 데이터를 덤프 파일로 추출하고, 타깃 DB에 적재하는 절차를 정리한다.
+
+이 문서는 **특정 테이블을 초기 적재하는 예시**다. 실제 서버명, 경로, 스키마명, 비밀번호, SCN은 작업 환경에 맞게 변경한다.
+
+## 작업 흐름
+
+1. Data Pump 디렉터리 준비
+2. 소스 DB의 SCN 조회
+3. 소스 DB에서 Export
+4. 덤프 파일을 타깃 서버로 전송
+5. 타깃 DB에서 Import
+6. 적재 결과 및 SharePlex 상태 검증
+
+> **주의:** 아래 명령은 예시다. 운영 환경에서는 실행 전 대상 DB, 경로, 테이블, 덤프 파일명을 확인한다. 비밀번호를 명령행에 직접 입력하면 셸 기록이나 프로세스 정보에 노출될 수 있으므로 보안 정책에 맞는 인증 방식을 사용한다.
+
+---
+
+## 1. Data Pump 준비
+
+### 1-1. DIRECTORY 객체 생성
+
+소스 DB와 타깃 DB 각각에서 DBA 권한으로 실행한다. 경로는 해당 DB 서버의 파일시스템 경로여야 한다.
+
+```sql
+CREATE OR REPLACE DIRECTORY datapump
+AS '/u01/app/oracle/admin/racdb/dpdump';
+
+GRANT READ, WRITE ON DIRECTORY datapump TO splex;
+```
+
+### 1-2. 경로 및 권한 확인
+
+DB 서버 OS에서 실행한다.
+
+```bash
+ls -ld /u01/app/oracle/admin/racdb/dpdump
+```
+
+SQL*Plus에서 DIRECTORY 설정을 확인한다.
+
+```sql
+SELECT directory_name, directory_path
+FROM dba_directories
+WHERE directory_name = 'DATAPUMP';
+```
+
+확인 목록:
+
+- [x] DIRECTORY 객체 생성 명령 실행 및 `Directory created.` 확인
+- [x] `splex` 계정에 READ/WRITE 권한 부여 및 `Grant succeeded.` 확인
+- [ ] DIRECTORY 경로가 해당 DB 서버에 실제로 존재하는지 확인
+- [ ] Oracle Database 소프트웨어 소유자가 해당 경로에 파일을 읽고 쓸 수 있는지 확인
+
+**참고:** DIRECTORY 객체는 DB 서버의 OS 경로를 가리킨다. 소스와 타깃이 서로 다른 서버라면 각 서버의 경로와 권한을 각각 확인한다.
+
+---
+
+## 2. SCN 채번
+
+소스 DB에서 Export 기준으로 사용할 SCN을 조회한다.
+
+```sql
+SELECT current_scn
+FROM v$database;
+```
+
+조회된 SCN을 기록하고, 다음 단계의 `FLASHBACK_SCN` 값으로 사용한다.
+
+확인 목록:
+
+- [x] 현재 SCN 조회 명령 실행
+- [ ] 조회 결과의 SCN 값을 기록
+- [ ] Export 명령의 `FLASHBACK_SCN` 값이 기록한 SCN과 일치하는지 확인
+
+`FLASHBACK_SCN`은 지정한 SCN 시점의 데이터를 일관성 있게 추출하기 위한 옵션이다. 해당 시점의 데이터를 재구성하는 데 필요한 Undo 정보가 남아 있지 않으면 Export가 실패할 수 있다.
+
+---
+
+## 3. Export — 소스 DB
+
+아래 예시는 `HR.HR_SP_CHAT` 테이블을 Export하는 명령이다.
+
+```bash
+expdp splex/'비밀번호' \
+  DIRECTORY=datapump \
+  TABLES=HR.HR_SP_CHAT \
+  DUMPFILE=hrdump.dmp \
+  LOGFILE=SP_EXPORT.log \
+  FLASHBACK_SCN=5601866
+```
+
+- `DIRECTORY`: 앞에서 생성한 Oracle DIRECTORY 객체 이름
+- `TABLES`: Export 대상 테이블
+- `DUMPFILE`: 생성할 덤프 파일 이름
+- `LOGFILE`: Export 로그 파일 이름
+- `FLASHBACK_SCN`: 2단계에서 조회한 SCN
+
+Export 완료 여부를 로그에서 확인한다.
+
+```bash
+tail -30 /u01/app/oracle/admin/racdb/dpdump/SP_EXPORT.log
+```
+
+정상 완료 시 로그에 다음과 유사한 메시지가 표시된다.
+
+```text
+Job "SPLEX"."SYS_EXPORT_TABLE_01" successfully completed
+```
+
+확인 목록:
+
+- [x] Export 명령 실행
+- [x] 제공된 예시 로그에서 `HR.HR_SP_CHAT` 200 rows 추출 확인
+- [ ] 실제 사용한 `FLASHBACK_SCN`이 조회한 SCN과 일치하는지 확인
+- [ ] 실제 덤프 파일명과 로그에 표시된 파일명이 일치하는지 확인
+- [ ] Export 작업의 성공 메시지 확인
+
+**주의:** 예시 기록에는 SCN 값과 덤프 파일명이 서로 다르게 기재된 부분이 있다. 실제 작업에서는 실행 명령과 해당 작업의 로그를 대조한다. 위 명령의 `5601866`, `hrdump.dmp`는 예시 값이므로 실제 결과에 맞게 수정한다.
+
+덤프 파일의 실제 저장 경로는 `DIRECTORY` 객체의 경로에 의해 결정된다. `DUMPFILE` 파일은 클라이언트 PC가 아니라 DB 서버의 파일시스템에 생성된다.
+
+---
+
+## 4. 덤프 파일을 타깃 서버로 전송
+
+소스와 타깃 DB가 서로 다른 서버라면, Export가 완료된 덤프 파일을 타깃 서버로 복사한다.
+
+```bash
+scp /소스경로/hrdump.dmp oracle@타깃서버:/타깃경로/
+```
+
+타깃 서버에서 파일이 존재하는지 확인한다.
+
+```bash
+ls -lh /타깃경로/hrdump.dmp
+```
+
+선택적으로 양쪽 서버에서 해시를 비교해 파일이 동일한지 확인할 수 있다.
+
+```bash
+sha256sum /경로/hrdump.dmp
+```
+
+확인 목록:
+
+- [ ] 타깃 서버의 실제 DIRECTORY 경로 확인
+- [ ] 덤프 파일을 타깃 서버로 전송
+- [ ] 타깃 경로에 덤프 파일이 존재하는지 확인
+- [ ] 필요한 경우 소스와 타깃의 파일 해시 비교
+
+**참고:** 소스와 타깃의 DIRECTORY 경로가 같을 필요는 없다. 중요한 것은 타깃 DB의 `datapump` DIRECTORY가 실제 덤프 파일이 있는 타깃 서버 경로를 가리키는 것이다.
+
+---
+
+## 5. Import — 타깃 DB
+
+타깃 테이블이 이미 존재하고, 기존 데이터를 비운 뒤 덤프 데이터를 넣으려는 경우의 예시다.
+
+```bash
+impdp splex/'비밀번호' \
+  DIRECTORY=datapump \
+  DUMPFILE=hrdump.dmp \
+  LOGFILE=SP_IMPORT.log \
+  TABLE_EXISTS_ACTION=TRUNCATE
+```
+
+`TABLE_EXISTS_ACTION=TRUNCATE`는 대상 테이블이 존재하면 기존 행을 비우고 데이터를 적재한다. 테이블 자체를 삭제하고 다시 만드는 옵션은 아니다.
+
+Import 로그에 다음과 유사한 메시지가 있는지 확인한다.
+
+```text
+Table "HR"."HR_SP_CHAT" exists and has been truncated.
+. . imported "HR"."HR_SP_CHAT" 16.60 KB 200 rows
+Job "SPLEX"."SYS_IMPORT_TABLE_01" successfully completed
+```
+
+확인 목록:
+
+- [x] Import 명령 실행
+- [x] 제공된 예시 로그에서 기존 테이블 TRUNCATE 확인
+- [x] 제공된 예시 로그에서 200 rows Import 확인
+- [ ] 실제 Import 로그에서 작업 성공 메시지 확인
+- [ ] Import 대상 테이블과 덤프 파일명이 올바른지 확인
+- [ ] 타깃 테이블의 구조 및 필요한 인덱스·제약조건 확인
+
+**주의:** `TABLE_EXISTS_ACTION=TRUNCATE`를 사용하면 기존 테이블의 종속 메타데이터는 이 옵션에 따른 Import 과정에서 적용되지 않을 수 있다. 타깃 테이블의 구조, 인덱스, PK/UK 및 제약조건 상태를 별도로 확인한다.
+
+---
+
+## 6. 적재 결과 검증 및 SharePlex 확인
+
+### 6-1. 데이터 건수 확인
+
+소스와 타깃 양쪽에서 같은 테이블의 건수를 조회한다.
+
+```sql
+SELECT COUNT(*)
+FROM HR.HR_SP_CHAT;
+```
+
+제공된 Export/Import 로그에서는 200 rows가 처리된 것으로 나타난다. 실제 작업에서는 양쪽 DB의 조회 결과를 비교한다.
+
+### 6-2. 인덱스 상태 확인
+
+타깃 DB에서 실행한다.
+
+```sql
+SELECT index_name, status, uniqueness
+FROM dba_indexes
+WHERE owner = 'HR'
+  AND table_name = 'HR_SP_CHAT'
+ORDER BY index_name;
+```
+
+필요에 따라 PK/UK 및 제약조건도 확인한다.
+
+```sql
+SELECT constraint_name, constraint_type, status
+FROM dba_constraints
+WHERE owner = 'HR'
+  AND table_name = 'HR_SP_CHAT'
+ORDER BY constraint_name;
+```
+
+### 6-3. SharePlex 복제 상태 확인
+
+초기 적재가 완료됐다고 바로 복제를 시작하지 않는다. 초기 적재 기준 시점과 복제 시작 시점을 조율해 변경 데이터가 누락되거나 중복 적용되지 않도록 해야 한다.
+
+- [ ] 소스와 타깃의 데이터 건수 비교
+- [ ] 주요 데이터 값 비교
+- [ ] 타깃 인덱스 상태 확인
+- [ ] 필요한 PK/UK 및 제약조건 확인
+- [ ] SharePlex Capture, Export, Import, Post 상태 확인
+- [ ] 초기 적재와 SharePlex 복제 사이의 변경 데이터 처리 방식 확인
+
+---
+
+## 최종 체크리스트
+
+- [ ] **1.** 소스와 타깃의 DIRECTORY 객체 및 OS 경로 확인
+- [ ] **2.** 소스 SCN 조회 및 기록
+- [ ] **3.** SCN을 지정해 Export하고 로그에서 성공 확인
+- [ ] **4.** 덤프 파일을 타깃 서버로 전송하고 파일 존재 확인
+- [ ] **5.** 타깃에서 Import하고 로그에서 성공 확인
+- [ ] **6.** 데이터와 객체를 검증하고 SharePlex 복제 시작 시점 확인
+
+> **핵심:** Data Pump는 초기 데이터 적재를 수행한다. `FLASHBACK_SCN`은 Export 데이터의 기준 시점을 정하지만, 그 이후 발생한 변경 데이터를 자동으로 타깃에 반영하지는 않는다. SharePlex 복제 시작 시점과 변경분 처리 절차는 사용 중인 SharePlex 버전 및 운영 방식에 맞춰 별도로 확인한다.
