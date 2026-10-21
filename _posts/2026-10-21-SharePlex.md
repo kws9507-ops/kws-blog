@@ -1,5 +1,5 @@
 ---
-title: "[SharePlex] Queue분리 => 초기적재 => 복제 시나리오"
+title: "[SharePlex] Queue수정 => 초기적재 => 복제 시나리오"
 date: 2026-10-21 10:00:00 +0900
 categories:
   - SharePlex
