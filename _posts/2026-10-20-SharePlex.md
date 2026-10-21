@@ -34,7 +34,7 @@ Source DB에 접속하여 복제에서 제외할 대상 테이블의 `OBJECT_ID`
 ```sql
 SELECT owner, object_name, object_id, object_type
 FROM dba_objects
-WHERE owner = 'HR' AND object_name = '제외할테이블명';
+WHERE owner = '스키마명' AND object_name = '제외할테이블명';
 ```
 *(예시: 조회된 `OBJECT_ID`가 `72965`라고 가정)*
 
