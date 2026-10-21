@@ -10,17 +10,18 @@ tags:
   - Database
 ---
 
-이번 포스팅에서는 SharePlex 환경에서 Config 파일을 수정하고, **Datapump(`expdp`/`impdp`)를 활용한 초기 데이터 적재**, 그리고 **Reconcile과 Flush를 통한 큐 정합성 맞춤 및 검증 작업** 시나리오를 단계별로 살펴보겠습니다.
+이번 포스팅에서는 SharePlex 환경에서 Config 파일을 수정하고, **Datapump(`expdp`/`impdp`)를 활용한 데이터 초기적재**, 그리고 **Reconcile과 Flush를 통한 큐 정합성 맞춤 및 검증 작업** 시나리오를 단계별로 살펴보겠습니다.
 
 ---
 
-## 1. Config 수정 및 반영
+# 1. Config 수정 및 반영
 
 기존 `old_config` 파일을 복사하여 `new_config` 파일을 생성하고, 대상 큐(Queue)를 중지한 뒤 `new_config`를 활성화합니다.
 
 > 💡 **참고:** 여기서 **대상 큐(Queue)**는 초기적재 작업을 진행할 테이블이 속해있는 Post Queue를 의미합니다.
 
-### 1.1. OS 환경에서 Config 복사 및 편집
+## 1.1. OS 환경에서 Config 복사 및 편집
+
 ```bash
 # var/config 디렉토리 이동 후 설정 파일 복사
 cp old_config new_config
@@ -28,7 +29,8 @@ ls -l
 vi new_config
 ```
 
-### 1.2. sp_ctrl 상에서 Post 중지 및 신규 Config 활성화
+## 1.2. sp_ctrl 상에서 Post 중지 및 신규 Config 활성화
+
 ```text
 # Target DB sp_ctrl
 sp_ctrl (Target)> stop post queue <queue_name>
@@ -38,7 +40,8 @@ sp_ctrl (Source)> activate config <new_config>
 sp_ctrl (Source)> list config
 ```
 
-### 1.3. 프로세스 상태 확인
+## 1.3. 프로세스 상태 확인
+
 Target DB에서 `show` 명령어를 수행하여 해당 Post 프로세스가 `Stopped by user` 상태인지 확인합니다.
 
 ```text
@@ -47,35 +50,15 @@ sp_ctrl (Target)> show
 
 ---
 
-## 2. Datapump 초기적재
+# 2. Datapump 초기적재
 
-초기 적재 기준점을 잡기 위해 Source DB에서 SCN을 채번하고 Datapump를 통해 Target DB로 데이터를 이관합니다.
+Datapump를 활용한 상세한 초기적재 작업 방법(Directory 생성, SCN 채번, `expdp`/`impdp` 옵션 등)은 아래 포스팅을 참고하시기 바랍니다.
 
-### 2.1. Directory 생성 및 권한 부여
-```sql
--- Source 및 Target DB 공통 수행
-CREATE OR REPLACE DIRECTORY datapump AS '/u01/app/oracle/admin/dpdump';
-GRANT READ, WRITE ON DIRECTORY datapump TO splex;
-```
-
-### 2.2. SCN 채번 (Source DB)
-```sql
-SELECT current_scn FROM v$database;
--- 예: 5601866
-```
-
-### 2.3. expdp / impdp 실행
-```bash
-# Source DB: SCN 기준 Export
-expdp splex/splex directory=datapump tables=schema.table_name dumpfile=export.dmp logfile=exp.log flashback_scn=<SCN_Number>
-
-# Target DB: Data Import (기존 데이터 갱신 시 TRUNCATE 옵션 활용)
-impdp splex/splex directory=datapump dumpfile=export.dmp logfile=imp.log table_exists_action=TRUNCATE
-```
+👉 **[Datapump를 이용한 데이터 초기적재 가이드 바로가기]([URL_주소](https://kws9507-ops.github.io/kws-blog/oracle/2026/10/20/Oracle.html))**
 
 ---
 
-## 3. Reconcile 수행 (Target)
+# 3. Reconcile 수행 (Target)
 
 Target DB에서 Datapump 시점 기준으로 Reconcile을 수행하여 초기적재 중 발생한 트랜잭션의 중복 적용을 방지합니다.
 
@@ -92,11 +75,12 @@ sp_ctrl (Target)> reconcile queue <queue_name> for o.<source_sid>-o.<target_sid>
 
 ---
 
-## 4. Flush 및 Post 프로세스 구동
+# 4. Flush 및 Post 프로세스 구동
 
 Source DB에서 큐를 플러시(Flush)하여 Reconcile 대기 상태를 풀고, Target DB의 Post 프로세스를 재시작합니다.
 
-### 4.1. Source 및 Target 작업
+## 4.1. Source 및 Target 작업
+
 ```text
 # 1) Source DB sp_ctrl에서 Flush 실행
 sp_ctrl (Source)> flush o.<source_sid> queue <queue_name>
@@ -105,7 +89,8 @@ sp_ctrl (Source)> flush o.<source_sid> queue <queue_name>
 sp_ctrl (Target)> start post queue <queue_name>
 ```
 
-### 4.2. 프로세스 상태 확인
+## 4.2. 프로세스 상태 확인
+
 Target DB에서 `show` 명령어로 `Post` 프로세스가 정상적으로 `Running` 상태로 전환되었는지 확인합니다.
 
 ```text
@@ -114,11 +99,12 @@ sp_ctrl (Target)> show
 
 ---
 
-## 5. Compare 검증
+# 5. Compare 검증
 
 모든 작업이 완료된 후 Source와 Target 데이터의 정합성을 검증합니다.
 
-### 5.1. Compare 실행 옵션 예시
+## 5.1. Compare 실행 옵션 예시
+
 ```text
 # 신규 Config 기준 전체 비교
 sp_ctrl (Source)> compare using <new_config>
@@ -131,7 +117,8 @@ sp_ctrl (Source)> compare <schema>.<table_name>
 sp_ctrl (Source)> compare <schema>.<table_name>.<partition_name>
 ```
 
-### 5.2. 진행 상태 및 결과 확인
+## 5.2. 진행 상태 및 결과 확인
+
 ```text
 # Compare 작업 상태 확인
 sp_ctrl (Source)> compare status
