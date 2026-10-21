@@ -86,8 +86,10 @@ show
 설정이 완료된 후 데이터 정합성을 확인하기 위해 `compare`를 수행합니다.
 
 ```text
-compare using cfg_01_1
-
+compare using new_config
+compare using config_name threads 2 parallelism 2 nosqllog
+compare schema.table_name
+compare schema.table_name.partition_name
 ```
 
 작업 상태를 모니터링합니다.
