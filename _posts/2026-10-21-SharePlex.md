@@ -54,7 +54,7 @@ sp_ctrl (Target)> show
 
 Datapump를 활용한 상세한 초기적재 작업 방법(Directory 생성, SCN 채번, `expdp`/`impdp` 옵션 등)은 아래 포스팅을 참고하시기 바랍니다.
 
-👉 **[Datapump를 이용한 데이터 초기적재 가이드 바로가기]([URL_주소](https://kws9507-ops.github.io/kws-blog/oracle/2026/10/20/Oracle.html))**
+👉 **[Datapump를 이용한 데이터 초기적재 가이드 바로가기](https://kws9507-ops.github.io/kws-blog/oracle/2026/10/20/Oracle.html)**
 
 ---
 
