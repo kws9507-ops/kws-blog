@@ -1,25 +1,28 @@
 ---
-layout: post
-title: "[SharePlex] SharePlex 설정 수정 및 Reconcile, Datapump 연동 가이드"
-date: 2026-01-08 15:00:00 +0900
-categories: [Database, SharePlex]
-tags: [SharePlex, Oracle, Replication, Datapump, Reconcile]
+title: "[SharePlex] Queue분리 => 초기적재 => 복제 시나리오"
+date: 2026-10-21 10:00:00 +0900
+categories:
+  - SharePlex
+tags:
+  - SharePlex
+  - Oracle
+  - Replication
+  - Database
 ---
 
-이번 포스팅에서는 SharePlex 환경에서 설정 파일(`config`)을 수정하고, Datapump(`expdp`/`impdp`)를 활용한 데이터 동기화 과정, 그리고 Reconcile과 Flush를 통한 큐 정합성 맞춤 작업을 단계별로 살펴보겠습니다.
+이번 포스팅에서는 SharePlex 환경에서 config파일을 수정하고, Datapump(`expdp`/`impdp`)를 활용한 데이터 동기화 과정, 그리고 Reconcile과 Flush를 통한 큐 정합성 맞춤 작업을 단계별로 살펴보겠습니다.
 
 ---
 
-## 5. Config 수정 및 반영
+# 1. Config 수정 및 반영
 
 기존 설정 파일을 복사하여 새로운 설정 파일을 생성하고, 대상 큐(Queue)를 중지한 뒤 새로운 설정을 활성화합니다.
 
 ```bash
 # 설정 파일 복사 및 편집
-[racdb1:/home/splex/splex/var/config]> cp cfg_01 cfg_01_1
-[racdb1:/home/splex/splex/var/config]> ls
-cfg_01  cfg_01_1  ORA_config
-[racdb1:/home/splex/splex/var/config]> vi cfg_01_1
+cp old_config new_config
+ls
+vi new_config => Queue분리 작업
 ```
 
 `sp_ctrl` 상에서 대상 큐를 중지하고 새로운 설정을 활성화합니다.
