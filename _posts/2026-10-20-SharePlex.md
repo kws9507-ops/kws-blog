@@ -28,7 +28,7 @@ Oracle 데이터 가드(Data Guard)나 SharePlex 같은 CDC/복제 솔루션을 
 
 # 2. 복제 제외 테이블 설정 절차
 
-### 2.1 Source DB에서 제외할 테이블의 OBJECT_ID 확인
+## 2.1 Source DB에서 제외할 테이블의 OBJECT_ID 확인
 Source DB에 접속하여 복제에서 제외할 대상 테이블의 `OBJECT_ID`를 조회합니다.
 
 ```sql
