@@ -1,0 +1,632 @@
+# Snowflake CoWork 에이전트를 위한 전제조건 검정 커스텀 도구 만들기 (정규성 · 등분산성 · 분산비 F검정)
+
+> t검정, 분산분석 같은 모수 검정의 전제조건인 **정규성**과 **등분산성**을 검정하는 도구를 Python 저장 프로시저로 구현해, Snowflake CoWork 에이전트의 커스텀 도구로 쓸 수 있게 만드는 과정을 정리했습니다. Shapiro-Wilk, Kolmogorov-Smirnov(Lilliefors), Anderson-Darling, Levene, Brown-Forsythe, Bartlett, 분산비 F검정을 다룹니다.
+
+## 목차
+1. [왜 커스텀 도구가 필요한가](#1-왜-커스텀-도구가-필요한가)
+2. [전체 구성](#2-전체-구성)
+3. [샘플 데이터 만들기](#3-샘플-데이터-만들기)
+4. [전제조건 검정 프로시저 만들기](#4-전제조건-검정-프로시저-만들기)
+5. [실행 및 결과 해석](#5-실행-및-결과-해석)
+6. [에이전트에 연결할 때 팁](#6-에이전트에-연결할-때-팁)
+7. [마무리](#7-마무리)
+
+---
+
+## 1. 왜 커스텀 도구가 필요한가
+
+Snowflake CoWork(구 Snowflake Intelligence)의 Cortex Analyst 도구는 자연어 질문을 **SQL로 바꿔 실행**합니다. 왜도, 첨도, 분산은 SQL 함수로 구할 수 있지만, 그것만으로 "정규분포를 따르는가", "분산이 같은가"를 판정하기는 어렵습니다.
+
+| 항목 | SQL만으로 처리할 때 |
+|---|---|
+| 분산, 표준편차, 왜도, 첨도 | `VAR_SAMP`, `STDDEV_SAMP`, `SKEW`, `KURTOSIS`로 가능 |
+| 분산비 F값, Bartlett 통계량 | 계산은 가능하지만 쿼리가 길어짐 |
+| p-value | F분포·카이제곱 분포의 누적분포함수가 Snowflake SQL에 기본 제공되지 않음* |
+| Shapiro-Wilk 검정 | 특수한 계수표와 근사식이 필요해서 SQL로 구현하기 어려움 |
+| KS / Anderson-Darling 검정 | 정규분포 누적분포함수와 임계값 표가 필요함 |
+| Levene / Brown-Forsythe 검정 | 집단별 중앙값 편차로 다시 분산분석을 해야 해서 쿼리가 복잡함 |
+
+\* 작성 시점 기준으로 확인한 내용입니다. 이후 Snowflake에 관련 함수가 추가되었을 수 있으니 공식 문서를 함께 확인하세요.
+
+그래서 `scipy.stats`를 쓰는 **Python 저장 프로시저**를 만들고, 이를 에이전트의 custom tool로 등록하는 방식을 택했습니다.
+
+### 다른 도구에도 전제조건 검정이 들어 있는데 왜 따로 만드나
+
+이 시리즈의 `RUN_MEAN_TEST`와 `RUN_ANOVA`는 내부적으로 Shapiro-Wilk와 Levene 검정을 계산해서 권장 검정을 고릅니다. 하지만 그건 **다른 검정을 위한 보조 계산**입니다. 사용자가 다음과 같이 **전제조건 자체를 물을 때**는 이 도구가 필요합니다.
+
+- "이 데이터 정규분포 따라?"
+- "두 공정의 품질 편차가 같아?" (분산 자체가 관심 대상)
+- "t검정 쓰기 전에 가정 확인해줘"
+
+이 도구는 검정 여러 개를 함께 돌리고 왜도·첨도까지 보여줘서, 전제조건을 **더 자세히** 판단할 수 있게 합니다.
+
+### 이 도구가 다루는 검정
+
+| 구분 | 검정 | 특징 |
+|---|---|---|
+| **정규성** | Shapiro-Wilk | 가장 검출력이 높아 표준으로 쓰임. 판정 기준으로 사용 |
+| | Kolmogorov-Smirnov (Lilliefors) | 분포 전체의 최대 차이를 봄. 평균·표준편차를 데이터에서 추정한 경우의 보정 버전 |
+| | Anderson-Darling | 분포의 꼬리 부분에 더 민감함 |
+| **등분산성** | Brown-Forsythe (Levene, 중앙값 기준) | 정규성 위반에 강건함. 정규성이 깨졌을 때 권장 |
+| | Levene (평균 기준) | 원래 Levene 검정. 비교용으로 함께 제공 |
+| | Bartlett | 정규분포일 때 가장 검출력이 높음. 정규성 위반에 민감 |
+| | 분산비 F검정 | 두 집단 분산의 비율을 F분포로 검정. 정규성 위반에 매우 민감 |
+
+#### 분산비 F검정과 분산분석의 F검정
+같은 F분포를 쓰지만 묻는 질문이 다릅니다. **분산비 F검정**은 "두 집단의 **분산**이 같은가"를 묻고(이 도구), **분산분석의 F검정**은 "여러 집단의 **평균**이 같은가"를 묻습니다(`RUN_ANOVA`).
+
+## 2. 전체 구성
+
+```
+KWS_DB
+└── STATISTICS (schema)
+    ├── SAMPLE_ASSUMPTION   -- 테스트용 샘플 테이블
+    └── RUN_ASSUMPTION(...) -- 전제조건 검정 Python 저장 프로시저 (VARIANT 반환)
+```
+
+동작 흐름은 다음과 같습니다.
+
+```
+사용자 질문 (CoWork)
+  → 에이전트가 RUN_ASSUMPTION 도구를 선택하고 TEST_TYPE과 파라미터를 채움
+  → 프로시저가 데이터를 읽어 여러 검정을 함께 계산
+  → 정규성 결과에 따라 권장 등분산 검정을 판단
+  → JSON 결과 반환
+  → 에이전트가 결과를 해석해서 답변
+```
+
+스키마는 다음과 같이 만듭니다.
+
+```sql
+CREATE SCHEMA IF NOT EXISTS KWS_DB.STATISTICS;
+```
+
+## 3. 샘플 데이터 만들기
+
+### 3.1 시나리오
+
+전제조건 검정은 "만족하는 경우"와 "위반하는 경우"를 모두 확인해야 하므로, 성질이 다른 수치 컬럼 세 개를 만들었습니다. 300건의 데이터를 A/B/C 세 집단(각 100건)으로 나눴습니다.
+
+| 컬럼 | 성질 | 이 데이터에서 묻는 질문 | 설계상 정답 |
+|---|---|---|---|
+| `NORMAL_AMT` | 정규분포, 세 집단 모두 같은 분포 | 정규분포를 따르는가? 집단 간 분산이 같은가? | **정규 / 등분산** |
+| `SKEWED_AMT` | 오른쪽으로 치우친 분포(로그정규), 세 집단 모두 같은 분포 | 정규분포를 따르는가? | **비정규** |
+| `UNEQUAL_VAR_AMT` | 정규분포, C집단만 표준편차가 큼 | 집단 간 분산이 같은가? | **이분산** |
+
+`SKEWED_AMT`는 구매금액처럼 대부분은 작고 일부만 아주 큰, 실무에서 흔한 형태를 흉내 낸 것입니다.
+
+### 3.2 테이블 구조
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `ID` | NUMBER | 행 ID (1~300) |
+| `GRP` | VARCHAR | 집단. `A`, `B`, `C` (각 100건, 순서대로 배정) |
+| `NORMAL_AMT` | NUMBER | 정규분포 값 |
+| `SKEWED_AMT` | NUMBER | 로그정규분포 값 (오른쪽 꼬리가 긴 분포) |
+| `UNEQUAL_VAR_AMT` | NUMBER | 집단별 표준편차가 다른 정규분포 값 |
+
+### 3.3 데이터 생성 규칙
+
+| 컬럼 | 분포 | 비고 |
+|---|---|---|
+| `NORMAL_AMT` | 정규분포, 평균 50,000 / 표준편차 8,000 | 모든 집단 동일 |
+| `SKEWED_AMT` | exp(정규분포(10.7, 0.6)) | 중앙값 약 44,000, 평균은 그보다 큰 약 53,000. 모든 집단 동일 |
+| `UNEQUAL_VAR_AMT` | 정규분포, 평균 50,000 / 표준편차 **A·B 5,000, C 12,000** | C만 분산이 약 5.8배 |
+
+### 3.4 생성 SQL
+
+```sql
+CREATE OR REPLACE TABLE KWS_DB.STATISTICS.SAMPLE_ASSUMPTION AS
+SELECT SEQ4() + 1 AS ID,
+       DECODE(MOD(SEQ4(), 3), 0, 'A', 1, 'B', 'C') AS GRP,
+       ROUND(NORMAL(50000, 8000, RANDOM()), 0) AS NORMAL_AMT,
+       ROUND(EXP(NORMAL(10.7, 0.6, RANDOM())), 0) AS SKEWED_AMT,
+       ROUND(50000 + NORMAL(0, 1, RANDOM()) * IFF(MOD(SEQ4(), 3) = 2, 12000, 5000), 0) AS UNEQUAL_VAR_AMT
+FROM TABLE(GENERATOR(ROWCOUNT => 300));
+```
+
+`EXP(NORMAL(...))`는 로그를 취하면 정규분포가 되는 **로그정규분포**를 만듭니다. 소득, 구매금액, 체류시간처럼 0보다 크고 오른쪽 꼬리가 긴 데이터를 흉내 낼 때 자주 씁니다.
+
+> **참고:** 시드 없이 `RANDOM()`을 쓰기 때문에 실행할 때마다 값이 달라집니다. 아래 수치는 필자의 실행 결과이며, 직접 실행하면 숫자는 조금씩 다르게 나옵니다. 특히 경계에 가까운 경우(예: 5.5의 B 집단 비교)는 실행에 따라 결론이 바뀔 수 있습니다.
+
+## 4. 전제조건 검정 프로시저 만들기
+
+### 4.1 설계 포인트
+
+- **두 가지 검정 유형:** `TEST_TYPE`으로 `normality`(정규성)와 `equal_variance`(등분산성)를 선택합니다.
+- **정규성은 세 가지 검정을 함께:** 하나의 검정만 보면 경계 사례에서 판단이 흔들릴 수 있어서, 세 검정을 모두 돌리고 통과 개수(`tests_passed`, 예: `3/3`)를 함께 보여줍니다. 최종 판정(`is_normal`)은 검출력이 가장 높은 Shapiro-Wilk 기준이고, 다른 두 검정과 결론이 엇갈리면 메모로 알려줍니다.
+- **KS 검정의 보정:** 평균과 표준편차를 데이터에서 추정한 뒤 일반 KS 검정을 하면 p-value가 과대평가되어 정규성을 너무 쉽게 통과시킵니다. 이를 바로잡은 것이 Lilliefors 검정이고, 여기서는 scipy의 `goodness_of_fit`(몬테카를로 999회)으로 구현했습니다. 그래서 KS의 p-value 해상도는 0.001입니다.
+- **표본 크기에 대한 안내:** 정규성 검정은 표본이 크면 사소한 차이에도 기각되는 경향이 있습니다. 그래서 n ≥ 30인데 정규성이 기각되면 "평균 비교(t검정, ANOVA)는 중심극한정리에 따라 대체로 사용 가능"이라는 메모를 붙입니다. 반대로 n < 8이면 검정을 하지 않고 오류를 반환합니다.
+- **등분산 검정의 권장 규칙:**
+
+| 조건 | 권장 검정 |
+|---|---|
+| 모든 집단이 정규성 만족 + 집단 2개 | 분산비 F검정 |
+| 모든 집단이 정규성 만족 + 집단 3개 이상 | Bartlett |
+| 정규성 위반 집단이 있음 | **Brown-Forsythe** (중앙값 기준 Levene) |
+
+  여기서 정규성은 **표본 크기와 관계없이 Shapiro-Wilk로 엄격하게** 판단합니다. 평균 비교 도구에서는 n ≥ 30이면 정규성을 충족으로 간주했지만, Bartlett과 분산비 F검정은 **표본이 커져도 정규성 위반에 민감한 성질이 사라지지 않기** 때문입니다. 이 차이가 이 도구 설계의 핵심입니다.
+
+- **대용량 데이터 처리:** Shapiro-Wilk는 5,000개를 넘으면 정확도가 떨어지므로, 그보다 많으면 고정 시드로 5,000개를 표본추출해서 검정합니다. 표본추출 여부는 `sampled_for_test`로 알려줍니다. 기술통계(평균, 왜도 등)는 전체 데이터로 계산합니다.
+- **입력 검증과 오류 메시지:** 식별자를 정규식으로 검증하고, 쿼리는 Snowpark DataFrame API로 구성해서 SQL 인젝션을 막습니다. 필터 결과가 0행이거나 집단 컬럼이 빠지면 원인을 알려줍니다.
+- **정확한 수치 표현:** 결과는 유효숫자 6자리로 반올림합니다. 소수 자릿수로 반올림하면 `3.9e-16` 같은 아주 작은 p-value가 0으로 뭉개지기 때문입니다.
+
+### 4.2 파라미터
+
+| 파라미터 | 기본값 | 설명 |
+|---|---|---|
+| `TABLE_NAME` | (필수) | 분석할 테이블. `DB.SCHEMA.TABLE` 형식 |
+| `VALUE_COL` | (필수) | 검정할 수치 컬럼 |
+| `TEST_TYPE` | `normality` | `normality` / `equal_variance` |
+| `GROUP_COL` | NULL | 집단 컬럼. 정규성에서는 선택(주면 집단별로 검정), 등분산성에서는 필수 |
+| `GROUPS` | NULL | 비교할 집단 목록 JSON 배열, 예: `["A","B"]`. 생략하면 전체 집단 |
+| `ALPHA` | 0.05 | 유의수준 |
+| `FILTER_COL`, `FILTER_VALUE` | NULL | 선택 사항. `FILTER_COL = FILTER_VALUE` 조건으로 데이터를 좁힘 |
+
+### 4.3 반환 항목
+
+**`normality`** (집단별 또는 `ALL`)
+
+| 항목 | 설명 |
+|---|---|
+| `n`, `mean`, `std`, `median` | 기술통계 |
+| `skewness`, `excess_kurtosis` | 왜도와 초과첨도. 정규분포는 둘 다 0 |
+| `shapiro_wilk` | W, p-value, 정규 여부 |
+| `ks_lilliefors` | D, p-value(해상도 0.001), 정규 여부 |
+| `anderson_darling` | A², 유의수준에 해당하는 임계값, 정규 여부 |
+| `tests_passed` | 세 검정 중 정규성을 통과한 개수 |
+| `is_normal`, `note` | 최종 판정(Shapiro-Wilk 기준)과 참고 메모 |
+| `all_normal`, `decision` | 모든 집단을 종합한 판정 |
+
+**`equal_variance`**
+
+| 항목 | 설명 |
+|---|---|
+| `groups` | 집단별 n, 표준편차, 분산, Shapiro-Wilk p |
+| `brown_forsythe_levene`, `levene_mean`, `bartlett` | 각 검정의 통계량과 p-value |
+| `variance_ratio_f` | 집단이 2개일 때만. F, 자유도, 양측 p-value, 분산비 신뢰구간 |
+| `max_min_variance_ratio` | 가장 큰 분산 / 가장 작은 분산 |
+| `normality_ok`, `recommended_test`, `equal_variance`, `decision` | 정규성 판정과 권장 검정, 최종 판정 |
+
+**결과 읽는 법**
+
+| 지표 | 해석 기준 |
+|---|---|
+| 왜도 | 0이면 대칭. 절댓값 0.5 미만 대략 대칭, 1 이상이면 크게 치우침 (양수는 오른쪽 꼬리) |
+| 초과첨도 | 0이면 정규분포 수준. 양수면 꼬리가 두꺼워 이상치가 많고, 음수면 꼬리가 얇음 |
+| 분산비 (최대/최소) | 경험적으로 4 미만이면 ANOVA가 대체로 견딜 만한 수준. 그 이상이면 Welch 계열 검정 권장 |
+| 분산비 신뢰구간 | 1을 포함하면 분산이 같다고 볼 수 있음 |
+
+### 4.4 전체 코드
+
+```sql
+CREATE OR REPLACE PROCEDURE KWS_DB.STATISTICS.RUN_ASSUMPTION(
+    TABLE_NAME   VARCHAR,
+    VALUE_COL    VARCHAR,
+    TEST_TYPE    VARCHAR DEFAULT 'normality',
+    GROUP_COL    VARCHAR DEFAULT NULL,
+    GROUPS       VARCHAR DEFAULT NULL,
+    ALPHA        FLOAT   DEFAULT 0.05,
+    FILTER_COL   VARCHAR DEFAULT NULL,
+    FILTER_VALUE VARCHAR DEFAULT NULL
+)
+RETURNS VARIANT
+LANGUAGE PYTHON
+RUNTIME_VERSION = '3.11'
+PACKAGES = ('snowflake-snowpark-python', 'pandas', 'numpy', 'scipy')
+HANDLER = 'main'
+COMMENT = 'Normality (Shapiro-Wilk, Lilliefors KS, Anderson-Darling) and equal-variance (Levene, Brown-Forsythe, Bartlett, variance-ratio F) tests'
+AS
+$$
+import json
+import math
+import re
+
+import numpy as np
+import scipy
+from scipy import stats
+from snowflake.snowpark import Session
+from snowflake.snowpark.functions import col
+
+_IDENT = re.compile(r'^[A-Za-z_][A-Za-z0-9_$]*$')
+MAX_GROUPS = 50
+MAX_SAMPLE = 5000
+
+
+def _check_ident(name, label, parts=1):
+    if name is None or name == '':
+        raise ValueError(f'{label} is required')
+    pieces = name.split('.')
+    if len(pieces) > parts or not all(_IDENT.match(p) for p in pieces):
+        raise ValueError(f'invalid {label}: {name}')
+    return name.upper()
+
+
+def _f(x):
+    if x is None:
+        return None
+    x = float(x)
+    return None if math.isnan(x) or math.isinf(x) else float(f'{x:.6g}')
+
+
+def _parse_groups(groups):
+    if not groups:
+        return None
+    try:
+        g = json.loads(groups)
+    except Exception:
+        raise ValueError('GROUPS must be a JSON array like ["A","B","C"]')
+    if not isinstance(g, list) or not g:
+        raise ValueError('GROUPS must be a JSON array like ["A","B","C"]')
+    return [str(x) for x in g]
+
+
+def _sw_p(a):
+    x = a if len(a) <= MAX_SAMPLE else np.random.default_rng(0).choice(a, MAX_SAMPLE, replace=False)
+    return stats.shapiro(x)[1] if len(x) >= 3 and np.std(x) > 0 else None
+
+
+def _normality_block(a, alpha):
+    n = len(a)
+    if n < 8:
+        return {'n': int(n), 'error': 'need at least 8 values for normality tests'}
+    sampled = n > MAX_SAMPLE
+    x = np.random.default_rng(0).choice(a, MAX_SAMPLE, replace=False) if sampled else a
+    if np.std(x) == 0:
+        return {'n': int(n), 'error': 'all values are identical'}
+
+    sw, sp = stats.shapiro(x)
+    gof = stats.goodness_of_fit(stats.norm, x, statistic='ks', n_mc_samples=999,
+                                rng=np.random.default_rng(0))
+    ad = stats.anderson(x, dist='norm')
+    levels = list(ad.significance_level)
+    target = min(levels, key=lambda lv: abs(lv - alpha * 100))
+    crit = float(ad.critical_values[levels.index(target)])
+
+    sw_ok = bool(sp >= alpha)
+    ks_ok = bool(gof.pvalue >= alpha)
+    ad_ok = bool(ad.statistic < crit)
+    votes = int(sw_ok) + int(ks_ok) + int(ad_ok)
+    normal = sw_ok
+    notes = []
+    if not normal and n >= 30:
+        notes.append('n >= 30: 중심극한정리에 따라 평균 비교(t검정, ANOVA)는 대체로 사용 가능')
+    if normal != (votes >= 2):
+        notes.append('검정 간 결론이 엇갈림: Q-Q plot 등으로 추가 확인 권장')
+
+    return {
+        'n': int(n),
+        'sampled_for_test': int(len(x)) if sampled else None,
+        'mean': _f(np.mean(a)), 'std': _f(np.std(a, ddof=1)), 'median': _f(np.median(a)),
+        'skewness': _f(stats.skew(a)), 'excess_kurtosis': _f(stats.kurtosis(a)),
+        'shapiro_wilk': {'W': _f(sw), 'p_value': _f(sp), 'normal': sw_ok},
+        'ks_lilliefors': {'D': _f(gof.statistic), 'p_value': _f(gof.pvalue), 'normal': ks_ok,
+                          'p_value_resolution': 0.001},
+        'anderson_darling': {'A2': _f(ad.statistic), 'critical_value': _f(crit),
+                             'significance_level_pct': _f(target), 'normal': ad_ok},
+        'tests_passed': f'{votes}/3',
+        'is_normal': normal,
+        'note': '; '.join(notes) or None,
+    }
+
+
+def main(session: Session, table_name, value_col, test_type, group_col, groups,
+         alpha, filter_col, filter_value):
+    try:
+        tbl = _check_ident(table_name, 'TABLE_NAME', parts=3)
+        vcol = _check_ident(value_col, 'VALUE_COL')
+        ttype = (test_type or 'normality').strip().lower()
+        alpha = 0.05 if alpha is None else float(alpha)
+        if ttype not in ('normality', 'equal_variance'):
+            raise ValueError("TEST_TYPE must be one of: normality, equal_variance")
+        wanted = _parse_groups(groups)
+
+        df = session.table(tbl)
+        cols = set(df.columns)
+
+        def need(name, label):
+            c = _check_ident(name, label)
+            if c not in cols:
+                raise ValueError(f'column not found: {c}')
+            return c
+
+        if vcol not in cols:
+            raise ValueError(f'column not found: {vcol}')
+        gcol = need(group_col, 'GROUP_COL') if group_col else None
+        if ttype == 'equal_variance' and not gcol:
+            raise ValueError('GROUP_COL is required for equal_variance')
+        if filter_col:
+            fcol = need(filter_col, 'FILTER_COL')
+            df = df.filter(col(fcol) == filter_value)
+
+        result = {'test_type': ttype, 'table': tbl, 'value_col': vcol, 'alpha': alpha,
+                  'scipy_version': scipy.__version__}
+        if filter_col:
+            result['filter'] = {filter_col.upper(): filter_value}
+
+        cond = col(vcol).is_not_null()
+        if gcol:
+            cond = cond & col(gcol).is_not_null()
+            result['group_col'] = gcol
+        pdf = df.filter(cond).select(*([gcol, vcol] if gcol else [vcol])).to_pandas()
+        if pdf.empty:
+            raise ValueError('no rows match the given conditions (check FILTER_COL/FILTER_VALUE)')
+
+        if gcol:
+            pdf[gcol] = pdf[gcol].astype(str)
+            present = sorted(pdf[gcol].unique())
+            if wanted:
+                missing = [g for g in wanted if g not in present]
+                if missing:
+                    raise ValueError(f'group values not found in {gcol}: {missing}')
+                names = wanted
+            else:
+                names = present
+            if len(names) > MAX_GROUPS:
+                raise ValueError(f'{gcol} has {len(names)} groups (max {MAX_GROUPS}); use a categorical column or GROUPS')
+            samples = {g: pdf.loc[pdf[gcol] == g, vcol].to_numpy(dtype=float) for g in names}
+        else:
+            samples = {'ALL': pdf[vcol].to_numpy(dtype=float)}
+
+        if ttype == 'normality':
+            blocks = {g: _normality_block(s, alpha) for g, s in samples.items()}
+            ok = [b.get('is_normal') for b in blocks.values() if 'error' not in b]
+            result.update({
+                'results': blocks,
+                'all_normal': bool(all(ok)) if ok else None,
+                'decision': ('모든 집단이 정규분포 가정을 만족' if ok and all(ok)
+                             else '정규분포 가정을 만족하지 않는 집단이 있음' if ok else None),
+            })
+            return result
+
+        names = list(samples)
+        if len(names) < 2:
+            raise ValueError('need at least 2 groups')
+        small = [g for g in names if len(samples[g]) < 2]
+        if small:
+            raise ValueError(f'each group needs at least 2 values; too few in: {small}')
+        arrs = [samples[g] for g in names]
+        variances = {g: float(np.var(samples[g], ddof=1)) for g in names}
+
+        bf_w, bf_p = stats.levene(*arrs, center='median')
+        lv_w, lv_p = stats.levene(*arrs, center='mean')
+        bt_s, bt_p = stats.bartlett(*arrs)
+        # Bartlett / F are sensitive to non-normality regardless of n, so no large-sample relaxation here
+        sw_ps = {g: _sw_p(samples[g]) for g in names}
+        normal_ok = all(p is not None and p >= alpha for p in sw_ps.values())
+        vmax, vmin = max(variances.values()), min(variances.values())
+
+        result.update({
+            'groups': {g: {'n': int(len(samples[g])), 'std': _f(math.sqrt(variances[g])),
+                           'variance': _f(variances[g]), 'shapiro_p': _f(sw_ps[g])} for g in names},
+            'brown_forsythe_levene': {'W': _f(bf_w), 'p_value': _f(bf_p), 'center': 'median'},
+            'levene_mean': {'W': _f(lv_w), 'p_value': _f(lv_p), 'center': 'mean'},
+            'bartlett': {'T': _f(bt_s), 'df': len(names) - 1, 'p_value': _f(bt_p)},
+            'max_min_variance_ratio': _f(vmax / vmin) if vmin > 0 else None,
+            'normality_ok': bool(normal_ok),
+        })
+
+        if len(names) == 2:
+            a, b = arrs
+            f_val = variances[names[0]] / variances[names[1]] if variances[names[1]] > 0 else None
+            if f_val is not None:
+                d1, d2 = len(a) - 1, len(b) - 1
+                p_two = 2 * min(stats.f.cdf(f_val, d1, d2), stats.f.sf(f_val, d1, d2))
+                lo = f_val / stats.f.ppf(1 - alpha / 2, d1, d2)
+                hi = f_val / stats.f.ppf(alpha / 2, d1, d2)
+                result['variance_ratio_f'] = {'F': _f(f_val), 'df1': d1, 'df2': d2,
+                                              'p_value': _f(min(1.0, p_two)),
+                                              'ratio_ci': [_f(lo), _f(hi)],
+                                              'note': '정규성에 민감: 정규성 위반 시 Brown-Forsythe 결과 우선'}
+
+        if normal_ok and 'variance_ratio_f' in result:
+            rec, p_rec = 'variance_ratio_f', result['variance_ratio_f']['p_value']
+        elif normal_ok:
+            rec, p_rec = 'bartlett', bt_p
+        else:
+            rec, p_rec = 'brown_forsythe_levene', bf_p
+        result['recommended_test'] = rec
+        result['equal_variance'] = bool(p_rec >= alpha)
+        result['decision'] = ('등분산 가정 만족 (귀무가설 채택)' if p_rec >= alpha
+                              else '등분산 가정 위반 (귀무가설 기각)')
+        return result
+    except Exception as e:
+        return {'error': str(e)}
+$$;
+```
+
+## 5. 실행 및 결과 해석
+
+> 프로시저는 결과를 VARIANT로 반환합니다. 클라이언트에 따라 `[object Object]`처럼 보이면, 호출 직후 아래 쿼리로 JSON 문자열을 확인할 수 있습니다.
+> ```sql
+> SELECT TO_JSON($1) FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+> ```
+
+### 5.1 정규성 검정: 정규분포 데이터
+
+```sql
+CALL KWS_DB.STATISTICS.RUN_ASSUMPTION(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_ASSUMPTION', VALUE_COL => 'NORMAL_AMT');
+```
+
+| 항목 | 값 |
+|---|---|
+| n / 평균 / 중앙값 | 300 / 49,453 / 49,507 |
+| 왜도 / 초과첨도 | 0.03 / −0.50 |
+| Shapiro-Wilk | W = 0.9934, p = 0.210 → 정규 |
+| KS (Lilliefors) | D = 0.036, p = 0.456 → 정규 |
+| Anderson-Darling | A² = 0.46 < 임계값 0.75 (5%) → 정규 |
+| 통과 | **3/3** |
+| 판정 | **정규분포 가정 만족** |
+
+**해석:** 세 검정 모두 정규성을 통과했습니다. 평균과 중앙값이 거의 같고 왜도도 0에 가까워 대칭입니다.
+
+### 5.2 정규성 검정: 치우친 데이터
+
+```sql
+CALL KWS_DB.STATISTICS.RUN_ASSUMPTION(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_ASSUMPTION', VALUE_COL => 'SKEWED_AMT');
+```
+
+| 항목 | 값 |
+|---|---|
+| n / 평균 / 중앙값 | 300 / **52,563** / **43,534** |
+| 왜도 / 초과첨도 | **1.78** / **4.41** |
+| Shapiro-Wilk | W = 0.855, p = 3.9 × 10⁻¹⁶ → 비정규 |
+| KS (Lilliefors) | D = 0.128, p ≤ 0.001 → 비정규 |
+| Anderson-Darling | A² = 10.0 > 임계값 0.75 → 비정규 |
+| 통과 | **0/3** |
+| 메모 | n ≥ 30: 중심극한정리에 따라 평균 비교(t검정, ANOVA)는 대체로 사용 가능 |
+| 판정 | **정규분포 가정을 만족하지 않음** |
+
+**해석:** 세 검정 모두 정규성을 기각했습니다. 평균이 중앙값보다 9,000원 이상 크고(오른쪽 꼬리), 왜도 1.78과 초과첨도 4.41은 크게 치우치고 이상치가 많은 분포라는 뜻입니다. 다만 n = 300으로 크기 때문에, **평균 비교가 목적이라면** t검정이나 분산분석을 써도 대체로 괜찮다는 메모가 함께 나옵니다. 중앙값이 대표값으로 더 적절한지는 별도로 판단해야 합니다.
+
+> KS의 p-value가 0.001로 표시되는 것은 몬테카를로 999회의 해상도 한계 때문입니다. 실제 p-value는 이보다 작다는 뜻입니다.
+
+### 5.3 정규성 검정: 집단별
+
+```sql
+CALL KWS_DB.STATISTICS.RUN_ASSUMPTION(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_ASSUMPTION', VALUE_COL => 'NORMAL_AMT',
+  GROUP_COL => 'GRP');
+```
+
+| 집단 | Shapiro-Wilk p | 판정 |
+|---|---|---|
+| A | 0.181 | 정규 |
+| B | 0.122 | 정규 |
+| C | 0.593 | 정규 |
+
+`all_normal = true`이고, 판정은 "모든 집단이 정규분포 가정을 만족"입니다. t검정이나 분산분석 전에는 이렇게 **집단별로** 정규성을 확인합니다. 전체 데이터로 보면 집단 간 평균 차이 때문에 분포가 여러 봉우리로 보여 정규성이 깨질 수 있기 때문입니다.
+
+### 5.4 등분산성 검정: 세 집단, C만 분산이 큰 경우
+
+```sql
+CALL KWS_DB.STATISTICS.RUN_ASSUMPTION(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_ASSUMPTION', VALUE_COL => 'UNEQUAL_VAR_AMT',
+  TEST_TYPE => 'equal_variance', GROUP_COL => 'GRP');
+```
+
+| 집단 | n | 표준편차 | Shapiro-Wilk p |
+|---|---|---|---|
+| A | 100 | 4,607 | 0.679 |
+| B | 100 | 4,736 | 0.962 |
+| C | 100 | **10,354** | 0.942 |
+
+| 검정 | 통계량 | p-value |
+|---|---|---|
+| Brown-Forsythe (중앙값) | W = 40.1 | 3.8 × 10⁻¹⁶ |
+| Levene (평균) | W = 42.2 | 7.2 × 10⁻¹⁷ |
+| **Bartlett (권장)** | **T = 89.98, df = 2** | **2.9 × 10⁻²⁰** |
+| 최대/최소 분산비 | 5.05 | |
+| 판정 | **등분산 가정 위반** | |
+
+**해석:** C집단의 분산이 A, B의 약 5배이고, 모든 검정이 등분산을 기각했습니다. 모든 집단이 정규성을 만족하므로 검출력이 가장 높은 Bartlett 검정이 권장되었습니다. 이 데이터로 평균을 비교한다면 일반 ANOVA 대신 **Welch ANOVA**를 써야 합니다(`RUN_ANOVA`가 자동으로 권장합니다).
+
+### 5.5 분산비 F검정: 두 집단
+
+**분산이 같은 경우 (`NORMAL_AMT`, A vs B):**
+```sql
+CALL KWS_DB.STATISTICS.RUN_ASSUMPTION(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_ASSUMPTION', VALUE_COL => 'NORMAL_AMT',
+  TEST_TYPE => 'equal_variance', GROUP_COL => 'GRP', GROUPS => '["A","B"]');
+```
+
+| 항목 | 값 |
+|---|---|
+| 표준편차 (A / B) | 7,752 / 9,224 |
+| **분산비 F (권장)** | **F = 0.706, df = (99, 99), p = 0.085** |
+| 분산비 95% 신뢰구간 | 0.475 ~ 1.050 (1을 포함) |
+| Brown-Forsythe p / Bartlett p | 0.107 / 0.085 |
+| 판정 | **등분산 가정 만족** |
+
+**분산이 다른 경우 (`UNEQUAL_VAR_AMT`, A vs C):**
+
+| 항목 | 값 |
+|---|---|
+| **분산비 F (권장)** | **F = 0.198, df = (99, 99), p = 1.95 × 10⁻¹⁴** |
+| 분산비 95% 신뢰구간 | 0.133 ~ 0.294 (1을 포함하지 않음) |
+| 판정 | **등분산 가정 위반** |
+
+**해석:** 두 집단이 모두 정규성을 만족하므로 분산비 F검정이 권장되었습니다. 첫 번째 경우는 설계상 같은 분포에서 뽑았기 때문에 신뢰구간이 1을 포함합니다. 다만 p = 0.085로 경계에 가까워 표본에 따라 결론이 바뀔 수 있는 사례입니다. 두 번째 경우는 C의 분산이 A의 약 5배라 뚜렷하게 기각됩니다.
+
+### 5.6 정규성이 깨졌을 때 Brown-Forsythe를 권장하는 이유
+
+치우친 데이터(`SKEWED_AMT`)의 A, B 집단을 비교해 봤습니다. **두 집단은 설계상 같은 분포**에서 뽑았으므로 실제 분산은 같습니다.
+
+```sql
+CALL KWS_DB.STATISTICS.RUN_ASSUMPTION(
+  TABLE_NAME => 'KWS_DB.STATISTICS.SAMPLE_ASSUMPTION', VALUE_COL => 'SKEWED_AMT',
+  TEST_TYPE => 'equal_variance', GROUP_COL => 'GRP', GROUPS => '["A","B"]');
+```
+
+| 검정 | p-value |
+|---|---|
+| 분산비 F | 4.6 × 10⁻⁵ |
+| Bartlett | 4.6 × 10⁻⁵ |
+| **Brown-Forsythe (권장)** | **0.0088** |
+| `normality_ok` | false (집단당 n = 100이지만 엄격 기준 적용) |
+| 판정 | 등분산 가정 위반 |
+
+**해석:** 실제 분산이 같은데도 분산비 F와 Bartlett은 p = 0.00005 수준으로 **매우 강하게** 기각했습니다. 꼬리가 두꺼운 분포에서는 극단값 몇 개가 표본 분산을 크게 흔드는데, 이 두 검정은 그 흔들림을 분산의 차이로 받아들이기 때문입니다. Brown-Forsythe는 중앙값 기준 편차를 써서 영향을 훨씬 덜 받습니다(p = 0.0088).
+
+이 실행에서는 Brown-Forsythe도 5% 수준에서 기각했습니다. 무거운 꼬리 분포에서는 어떤 검정도 완벽하지 않다는 점을 보여주는 결과이며, 다시 실행하면 결론이 달라질 수 있습니다. 그래도 **F와 Bartlett의 판정은 정규성이 깨지면 믿기 어렵고, 그 정도가 표본이 커져도 줄지 않는다**는 점은 분명합니다. 이 도구가 등분산 검정을 고를 때 n ≥ 30 완화 없이 엄격한 정규성 기준을 쓰는 이유입니다.
+
+### 5.7 잘못된 입력 처리
+
+| 입력 | 반환되는 오류 |
+|---|---|
+| `equal_variance`인데 `GROUP_COL` 누락 | `GROUP_COL is required for equal_variance` |
+| 필터 결과 0행 | `no rows match the given conditions (check FILTER_COL/FILTER_VALUE)` |
+| 지원하지 않는 `TEST_TYPE` | `TEST_TYPE must be one of: normality, equal_variance` |
+| 값이 8개 미만 | 해당 집단 결과에 `need at least 8 values for normality tests` |
+| 컬럼명에 `; DROP TABLE X` | `invalid VALUE_COL: ...` (쿼리 실행 안 됨) |
+
+### 5.8 SQL로 직접 계산한 값과 교차검증
+
+| 지표 | 프로시저 | SQL 직접 계산 |
+|---|---|---|
+| 분산비 F (`NORMAL_AMT`, A/B) | 0.706304 | 0.7063044 |
+| Bartlett T (`UNEQUAL_VAR_AMT`, 3집단) | 89.9849 | 89.984899 |
+
+Shapiro-Wilk, KS, Anderson-Darling은 SQL로 재현하기 어려워 scipy 결과를 그대로 사용했습니다.
+
+## 6. 에이전트에 연결할 때 팁
+
+Cortex Agent에 custom tool로 등록할 때는 **도구 설명(description)** 이 호출 정확도를 좌우합니다. 예시는 다음과 같습니다.
+
+```text
+데이터의 정규성과 집단 간 등분산성(분산이 같은지)을 검정한다.
+Shapiro-Wilk, Kolmogorov-Smirnov(Lilliefors), Anderson-Darling 정규성 검정과
+Levene, Brown-Forsythe, Bartlett, 분산비 F검정을 지원한다.
+- 데이터가 정규분포를 따르는지: TEST_TYPE='normality'
+  (집단별로 보려면 GROUP_COL 지정. t검정·ANOVA 전 확인은 집단별로 한다)
+- 집단 간 분산(편차, 산포, 변동성)이 같은지: TEST_TYPE='equal_variance', GROUP_COL 필수
+  (두 집단의 분산비 F검정도 이 유형으로 계산된다)
+- 일부 집단만 비교할 때는 GROUPS에 JSON 배열, 특정 조건만 분석할 때는 FILTER_COL/FILTER_VALUE
+정규성은 is_normal, tests_passed, skewness, excess_kurtosis로 설명하고 note가 있으면 함께 전달한다.
+등분산성은 recommended_test와 decision으로 답한다.
+평균 차이 검정에는 RUN_MEAN_TEST 또는 RUN_ANOVA를 사용한다.
+```
+
+함께 챙겨야 할 것들입니다.
+
+- **"정규성 기각 = 분석 불가"가 아님:** 표본이 크면 정규성 검정은 사소한 차이에도 기각됩니다. `note`의 중심극한정리 안내를 함께 전달해서, 사용자가 과도하게 걱정하지 않도록 하세요.
+- **평균 비교 도구와의 관계:** `RUN_MEAN_TEST`와 `RUN_ANOVA`는 전제조건을 스스로 확인하고 권장 검정을 고르므로, **평균 비교만 원할 때는 이 도구를 먼저 호출할 필요가 없습니다.** 이 도구는 사용자가 전제조건 자체를 묻거나, 분산(품질 편차 등)이 관심 대상일 때 씁니다.
+- **"F검정"이라는 표현:** 사용자가 "F검정"이라고만 하면 평균 비교(`RUN_ANOVA`)인지 분산 비교(이 도구)인지 모호합니다. 질문의 대상이 평균인지 편차인지로 구분하게 하세요.
+- **권한:** 에이전트를 사용하는 역할에 프로시저 USAGE 권한과 대상 테이블 SELECT 권한이 필요합니다.
+- **대용량 데이터:** 데이터를 pandas로 읽어 들이므로 큰 테이블은 `FILTER_COL`로 범위를 줄이세요. 정규성 검정 자체는 5,000개 표본으로 계산하지만, 데이터를 가져오는 비용은 전체 크기에 비례합니다.
+
+## 7. 마무리
+
+- SQL로는 어려운 **정규성 검정 3종과 등분산성 검정 4종**을 Python 저장 프로시저 하나로 해결했습니다.
+- 정규성은 **여러 검정과 왜도·첨도를 함께** 보여줘서, 하나의 p-value에 의존하지 않고 판단할 수 있게 했습니다.
+- 등분산 검정은 **정규성 결과에 따라 Bartlett / 분산비 F와 Brown-Forsythe 중에서 자동으로 권장**합니다. 이때 표본 크기 완화 없이 엄격한 정규성 기준을 써서, 정규성 위반에 민감한 검정의 잘못된 판정을 막습니다.
+- 함께 쓰는 도구:
+  - **1~2집단 평균 비교:** `RUN_MEAN_TEST` (t검정, Z검정, Mann-Whitney, Wilcoxon, 부호검정)
+  - **세 집단 이상의 평균 비교:** `RUN_ANOVA` (분산분석, Welch ANOVA, Kruskal-Wallis, Friedman, 사후검정)
+  - **비율·범주 비교:** `RUN_CHISQ` (카이제곱, Fisher, 비율 Z, McNemar)
+
+---
+
+**환경:** Snowflake, Python 3.11 런타임, `scipy` 1.17.1 / `numpy` / `pandas` (Snowflake Anaconda 채널)
