@@ -1,6 +1,18 @@
-# Snowflake CoWork 에이전트를 위한 분산분석 커스텀 도구 만들기 (ANOVA · Welch · Kruskal-Wallis · Friedman · 사후검정)
+---
+title: "[Snowflake] Snowflake CoWork 에이전트를 위한 분산분석 커스텀 도구 만들기"
+date: 2026-10-22 10:00:00 +0900
+categories:
+  - Snowflake
+tags:
+  - Snowflake
+  - ANOVA
+  - Welch
+  - Kruskal-Wallis
+  - Friedman
+  - 사후검정
+---
 
-> 세 집단 이상의 평균을 비교하는 **분산분석(ANOVA, F검정)** 과 그 대안인 **Welch ANOVA, Kruskal-Wallis, Friedman 검정**, 그리고 **사후검정(Tukey, Games-Howell, Dunn)** 을 Python 저장 프로시저 하나로 구현해, Snowflake CoWork 에이전트의 커스텀 도구로 쓸 수 있게 만드는 과정을 정리했습니다. [평균 비교 커스텀 도구](./snowflake-mean-test-custom-tool.md)의 3집단 이상 버전입니다.
+> 세 집단 이상의 평균을 비교하는 **분산분석(ANOVA, F검정)** 과 그 대안인 **Welch ANOVA, Kruskal-Wallis, Friedman 검정**, 그리고 **사후검정(Tukey, Games-Howell, Dunn)** 을 Python 저장 프로시저 하나로 구현해, Snowflake CoWork 에이전트의 커스텀 도구로 쓸 수 있게 만드는 과정을 정리했습니다.
 
 ## 목차
 1. [왜 커스텀 도구가 필요한가](#1-왜-커스텀-도구가-필요한가)
@@ -13,7 +25,7 @@
 
 ---
 
-## 1. 왜 커스텀 도구가 필요한가
+# 1. 왜 커스텀 도구가 필요한가
 
 Snowflake CoWork(구 Snowflake Intelligence)의 Cortex Analyst 도구는 자연어 질문을 **SQL로 바꿔 실행**합니다. 집단별 평균을 구하는 것은 쉽지만, 그 차이를 검정하는 일은 다릅니다.
 
@@ -30,7 +42,7 @@ Snowflake CoWork(구 Snowflake Intelligence)의 Cortex Analyst 도구는 자연�
 
 그래서 `scipy.stats`를 쓰는 **Python 저장 프로시저**를 만들고, 이를 에이전트의 custom tool로 등록하는 방식을 택했습니다.
 
-### F검정과 분산분석의 관계
+## F검정과 분산분석의 관계
 
 "F검정"이라는 이름은 두 가지 용도로 쓰입니다.
 
@@ -45,17 +57,17 @@ Snowflake CoWork(구 Snowflake Intelligence)의 Cortex Analyst 도구는 자연�
 F = (집단 간 평균제곱 MS_between) / (집단 내 평균제곱 MS_within)
 ```
 
-### 왜 t검정을 여러 번 하면 안 되나
+## 왜 t검정을 여러 번 하면 안 되나
 집단이 3개면 쌍이 3개, 5개면 10개입니다. 유의수준 5%로 t검정을 10번 하면 **실제로 차이가 없어도 하나 이상 유의하게 나올 확률이 약 40%** 까지 올라갑니다(1 − 0.95¹⁰). 그래서 분산분석으로 "어딘가 차이가 있는지"를 먼저 한 번에 검정하고, 차이가 있으면 **다중비교 보정을 한 사후검정**으로 어느 쌍이 다른지 확인합니다.
 
-### 이 도구가 다루는 질문: "3집단 이상의 평균(위치) 비교"
+## 이 도구가 다루는 질문: "3집단 이상의 평균(위치) 비교"
 
 | 상황 | 모수 검정 | 등분산 위반 시 | 비모수 대안 | 사후검정 |
 |---|---|---|---|---|
 | 서로 다른 집단 3개 이상 | 일원분산분석 | Welch ANOVA | Kruskal-Wallis | Tukey HSD / Games-Howell / Dunn |
 | 같은 대상을 3회 이상 측정 | (반복측정 ANOVA, 이번 범위에서 제외) | – | Friedman | Wilcoxon 쌍별 비교 (Holm 보정) |
 
-## 2. 전체 구성
+# 2. 전체 구성
 
 ```
 KWS_DB
@@ -81,9 +93,9 @@ KWS_DB
 CREATE SCHEMA IF NOT EXISTS KWS_DB.STATISTICS;
 ```
 
-## 3. 샘플 데이터 만들기
+# 3. 샘플 데이터 만들기
 
-### 3.1 시나리오
+## 3.1 시나리오
 
 온라인 쇼핑몰 고객 300명의 **3개월간 월별 구매금액**을 분석하는 상황을 가정했습니다.
 
@@ -98,7 +110,7 @@ CREATE SCHEMA IF NOT EXISTS KWS_DB.STATISTICS;
 | 일원분산분석: 지역별 (M1) | 지역에 따라 구매금액이 다른가? | **같음** |
 | Friedman: 월별 (같은 고객) | 같은 고객의 구매금액이 월별로 달라지는가? | **달라짐** (매월 증가) |
 
-### 3.2 테이블 구조
+## 3.2 테이블 구조
 
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
@@ -110,7 +122,7 @@ CREATE SCHEMA IF NOT EXISTS KWS_DB.STATISTICS;
 
 고객 1명당 3개월치 3행이므로 **전체 900행**입니다. 채널과 지역은 고객 속성이라 같은 고객의 세 행에서 값이 같습니다.
 
-### 3.3 데이터 생성 규칙
+## 3.3 데이터 생성 규칙
 
 구매금액은 다음 네 가지 요소를 더해서 만들었습니다.
 
@@ -128,7 +140,7 @@ CREATE SCHEMA IF NOT EXISTS KWS_DB.STATISTICS;
 
 고객 고유 효과와 오차를 합치면 한 달 기준 표준편차는 APP·WEB 약 7,800, STORE 약 13,400입니다.
 
-### 3.4 생성 SQL
+## 3.4 생성 SQL
 
 고객 속성(채널, 지역, 고유 효과)이 세 달 동안 같아야 하므로, 고객 테이블을 먼저 만들고 월과 교차 조인합니다.
 
@@ -154,7 +166,7 @@ CROSS JOIN (SELECT * FROM VALUES ('M1', 0), ('M2', 1500), ('M3', 3000) AS v(MONT
 
 > **참고:** 시드 없이 `RANDOM()`을 쓰기 때문에 실행할 때마다 값이 달라집니다. 아래 수치는 필자의 실행 결과이며, 직접 실행하면 숫자는 조금씩 다르게 나옵니다. 특히 효과가 작은 쌍(예: STORE vs WEB)은 실행에 따라 유의 여부가 바뀔 수 있습니다.
 
-### 3.5 생성된 데이터 요약 (필자 실행 기준)
+## 3.5 생성된 데이터 요약 (필자 실행 기준)
 
 **채널별 (M1)**
 
@@ -181,9 +193,9 @@ CROSS JOIN (SELECT * FROM VALUES ('M1', 0), ('M2', 1500), ('M3', 3000) AS v(MONT
 | M2 | 300 | 53,803 | 9,667 |
 | M3 | 300 | 54,369 | 10,196 |
 
-## 4. 분산분석 프로시저 만들기
+# 4. 분산분석 프로시저 만들기
 
-### 4.1 설계 포인트
+## 4.1 설계 포인트
 
 - **한 번 호출로 전부 계산:** `oneway`를 실행하면 일반 ANOVA, Welch ANOVA, Kruskal-Wallis, 세 가지 사후검정을 **모두** 계산합니다. 그리고 전제조건 결과를 보고 어느 결과를 쓸지(`recommended_test`, `recommended_posthoc`) 알려줍니다. 에이전트가 전제조건을 미리 판단하거나 도구를 여러 번 호출할 필요가 없습니다.
 - **권장 검정 판정 규칙:**
@@ -206,7 +218,7 @@ CROSS JOIN (SELECT * FROM VALUES ('M1', 0), ('M2', 1500), ('M3', 3000) AS v(MONT
 - **입력 검증과 오류 메시지:** 식별자를 정규식으로 검증하고, 쿼리는 Snowpark DataFrame API로 구성해서 SQL 인젝션을 막습니다. 필터 결과가 0행이거나 JSON 형식이 틀리면 원인을 알려줍니다.
 - **정확한 수치 표현:** 결과는 유효숫자 6자리로 반올림합니다.
 
-### 4.2 파라미터
+## 4.2 파라미터
 
 | 파라미터 | 기본값 | 설명 |
 |---|---|---|
@@ -219,7 +231,7 @@ CROSS JOIN (SELECT * FROM VALUES ('M1', 0), ('M2', 1500), ('M3', 3000) AS v(MONT
 | `ALPHA` | 0.05 | 유의수준 |
 | `FILTER_COL`, `FILTER_VALUE` | NULL | 선택 사항. `FILTER_COL = FILTER_VALUE` 조건으로 데이터를 좁힘 |
 
-### 4.3 반환 항목
+## 4.3 반환 항목
 
 **`oneway`**
 
@@ -251,7 +263,7 @@ CROSS JOIN (SELECT * FROM VALUES ('M1', 0), ('M2', 1500), ('M3', 3000) AS v(MONT
 | 0.06 ~ 0.14 | 중간 |
 | 0.14 이상 | 큼 |
 
-### 4.4 전체 코드
+## 4.4 전체 코드
 
 ```sql
 CREATE OR REPLACE PROCEDURE KWS_DB.STATISTICS.RUN_ANOVA(
@@ -600,14 +612,14 @@ def main(session: Session, table_name, value_col, group_col, test_type, groups,
 $$;
 ```
 
-## 5. 실행 및 결과 해석
+# 5. 실행 및 결과 해석
 
 > 프로시저는 결과를 VARIANT로 반환합니다. 클라이언트에 따라 `[object Object]`처럼 보이면, 호출 직후 아래 쿼리로 JSON 문자열을 확인할 수 있습니다.
 > ```sql
 > SELECT TO_JSON($1) FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
 > ```
 
-### 5.1 일원분산분석: 채널별 구매금액 (M1)
+## 5.1 일원분산분석: 채널별 구매금액 (M1)
 
 ```sql
 CALL KWS_DB.STATISTICS.RUN_ANOVA(
@@ -652,7 +664,7 @@ CALL KWS_DB.STATISTICS.RUN_ANOVA(
 >
 > 같은 데이터라도 **무엇을 비교하느냐(평균인지 순위 분포인지)와 어떤 가정을 하느냐**에 따라 결론이 달라질 수 있습니다. 그래서 도구가 전제조건에 맞는 검정을 `recommended_posthoc`으로 알려줍니다.
 
-### 5.2 일원분산분석: 지역별 구매금액 (M1)
+## 5.2 일원분산분석: 지역별 구매금액 (M1)
 
 ```sql
 CALL KWS_DB.STATISTICS.RUN_ANOVA(
@@ -672,7 +684,7 @@ CALL KWS_DB.STATISTICS.RUN_ANOVA(
 
 **해석:** 지역에 따라 구매금액이 다르다고 볼 근거가 없습니다. 세 검정이 모두 같은 결론입니다. 전체 검정이 유의하지 않으므로 사후검정 결과는 해석하지 않습니다.
 
-### 5.3 Friedman 검정: 같은 고객의 월별 구매금액
+## 5.3 Friedman 검정: 같은 고객의 월별 구매금액
 
 ```sql
 CALL KWS_DB.STATISTICS.RUN_ANOVA(
@@ -699,7 +711,7 @@ CALL KWS_DB.STATISTICS.RUN_ANOVA(
 
 > **왜 일원분산분석이 아니라 Friedman인가:** 같은 고객이 세 번 측정되었기 때문에 세 달의 값은 서로 독립이 아닙니다. 구매력이 큰 고객은 매달 큽니다. Friedman 검정은 **각 고객 안에서 월별 순위**를 비교하므로 이 고객 간 차이를 제거하고 월 효과만 봅니다. 고객 간 편차(표준편차 6,000)가 월 효과(1,500)보다 훨씬 크기 때문에, 일반 분산분석으로는 월 효과가 묻히기 쉽습니다.
 
-### 5.4 비모수 검정으로 자동 전환되는 경우
+## 5.4 비모수 검정으로 자동 전환되는 경우
 
 이상치가 섞인 소표본(집단당 10개)으로 자동 전환 기능을 확인했습니다.
 
@@ -720,7 +732,7 @@ C: 5.0, 5.2, 4.9, 5.1, 5.3, 5.0, 4.8, 5.4, 5.1, 60.0
 
 **해석:** 값 대부분은 A < B < C로 뚜렷하게 다른데, 극단값 때문에 집단 내 분산이 커져서 분산분석이 차이를 잡아내지 못했습니다. 도구가 정규성 위반을 감지하고 Kruskal-Wallis로 판정을 바꿨습니다.
 
-### 5.5 집단 선택과 오류 처리
+## 5.5 집단 선택과 오류 처리
 
 **`GROUPS`로 일부 집단만 비교:**
 ```sql
@@ -740,7 +752,7 @@ CALL KWS_DB.STATISTICS.RUN_ANOVA(
 | Friedman인데 `SUBJECT_COL` 누락 | `SUBJECT_COL is required` |
 | 컬럼명에 `; DROP TABLE X` | `invalid GROUP_COL: ...` (쿼리 실행 안 됨) |
 
-### 5.6 SQL로 직접 계산한 값과 교차검증
+## 5.6 SQL로 직접 계산한 값과 교차검증
 
 | 지표 | 프로시저 | SQL 직접 계산 |
 |---|---|---|
@@ -753,7 +765,7 @@ CALL KWS_DB.STATISTICS.RUN_ANOVA(
 
 모두 유효숫자 6자리까지 일치합니다.
 
-## 6. 에이전트에 연결할 때 팁
+# 6. 에이전트에 연결할 때 팁
 
 Cortex Agent에 custom tool로 등록할 때는 **도구 설명(description)** 이 호출 정확도를 좌우합니다. 예시는 다음과 같습니다.
 
@@ -782,7 +794,7 @@ Cortex Agent에 custom tool로 등록할 때는 **도구 설명(description)** �
 - **권한:** 에이전트를 사용하는 역할에 프로시저 USAGE 권한과 대상 테이블 SELECT 권한이 필요합니다.
 - **대용량 데이터:** 사후검정과 비모수 검정에 원본 값이 필요해서 데이터를 pandas로 읽어 들입니다. 큰 테이블은 `FILTER_COL`로 범위를 줄이거나 웨어하우스 크기를 고려해야 합니다.
 
-## 7. 마무리
+# 7. 마무리
 
 - 시맨틱 뷰만으로는 어려운 **분산분석(F검정), Welch ANOVA, 비모수 검정, 사후검정**을 Python 저장 프로시저 하나로 해결했습니다.
 - **한 번 호출로 모든 대안을 계산**하고 전제조건에 맞는 검정과 사후검정을 권장하므로, 에이전트가 통계적 판단을 대신 내릴 필요가 없습니다.
