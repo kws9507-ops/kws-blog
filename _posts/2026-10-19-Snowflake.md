@@ -1,12 +1,12 @@
 ---
-title: "[Snowflake] Snowflake CoWork 에이전트를 위한 평균 비교 커스텀 도구 만들기 (t검정 · Z검정 · 비모수 검정)"
+title: "[Snowflake] Snowflake CoWork 에이전트를 위한 평균 비교 커스텀 도구 만들기"
 date: 2026-10-19 10:00:00 +0900
 categories:
   - Snowflake
 tags:
   - Snowflake
-  - t_test
-  - z_test
+  - t검정
+  - Z검정
   - 비모수 검정
 ---
 
