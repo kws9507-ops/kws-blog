@@ -6,6 +6,8 @@ categories:
 tags:
   - Snowflake
   - t_test
+  - z_test
+  - 비모수 검정
 ---
 
 > Cortex Analyst(시맨틱 뷰)만으로는 어려운 **t검정, Z검정, 비모수 검정과 p-value 계산**을 Python 저장 프로시저 하나로 구현해, Snowflake CoWork 에이전트의 커스텀 도구로 쓸 수 있게 만드는 과정을 정리했습니다.
