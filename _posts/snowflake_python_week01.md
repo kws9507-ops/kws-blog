@@ -1,0 +1,765 @@
+# Snowflake 엔지니어를 위한 Python 1주차 학습 자료
+
+> **학습 주제:** Python 실행 환경 · 변수 · 기본 자료형 · 문자열 · 리스트 · 튜플 · 딕셔너리 · 집합  
+> **권장 학습량:** 총 8~9시간(하루 60~90분, 7일)  
+> **선수 지식:** SQL 기초. Python 경험은 없어도 됨.  
+> **이번 주 결과물:** 주문 데이터를 Python 자료구조로 표현하고, 주문·고객·상품 정보를 추출하는 `week01_project.py`
+
+---
+
+## 0. 이번 주 학습 목표
+
+이번 주에는 Snowflake나 pandas를 아직 연결하지 않는다. **데이터를 Python 코드에서 어떻게 표현하고 꺼내는지** 먼저 익힌다.
+
+학습을 마치면 다음을 직접 할 수 있어야 한다.
+
+- [ ] Python 파일을 생성하고 터미널에서 실행할 수 있다.
+- [ ] 프로젝트마다 독립적인 가상환경을 만들고 활성화할 수 있다.
+- [ ] `int`, `float`, `str`, `bool`, `None`을 구분할 수 있다.
+- [ ] 문자열에서 필요한 부분을 추출하고 출력 형식을 지정할 수 있다.
+- [ ] `list`, `tuple`, `dict`, `set`의 차이를 설명할 수 있다.
+- [ ] 주문 데이터가 **딕셔너리 여러 개로 구성된 리스트**인 이유를 설명할 수 있다.
+- [ ] 주문 수, 총 주문 금액, 중복 제외 고객 수를 기초 Python만으로 구할 수 있다.
+
+### 학습 일정
+
+| 날짜 | 주제 | 권장 시간 | 그날의 결과물 |
+|---|---|---:|---|
+| Day 1 | 개발 환경과 첫 Python 실행 | 60분 | `day01.py` 실행 |
+| Day 2 | 변수와 기본 자료형 | 60분 | 주문 필드의 타입 구분 |
+| Day 3 | 문자열과 숫자 처리 | 75분 | 주문 요약 문장 출력 |
+| Day 4 | 리스트와 튜플 | 75분 | 주문 금액 목록 관리 |
+| Day 5 | 딕셔너리와 중첩 데이터 | 75분 | 고객·주문 레코드 표현 |
+| Day 6 | 집합과 자료구조 선택 | 60분 | 고객 ID 중복 제거 |
+| Day 7 | 종합 실습 및 복습 | 90~120분 | `week01_project.py` 완성 |
+
+**권장 학습 순서:** 개념 읽기 → 예제 직접 실행 → 실습 문제 풀기 → 정답 확인 → 코드를 일부 변경해 재실행.
+
+---
+
+# Day 1. 실행 환경과 첫 Python 프로그램
+
+## 1-1. Python을 어디에서 실행할까?
+
+- **터미널:** 명령어로 Python 프로그램을 실행한다.
+- **`.py` 파일:** 실행할 Python 코드를 저장한다.
+- **가상환경(`venv`):** 프로젝트별로 패키지 설치 공간을 분리한다.
+- **코드 편집기:** VS Code 등으로 `.py` 파일을 작성한다.
+
+이번 주에는 별도 패키지를 설치하지 않는다. `venv`만 준비하면 된다.
+
+### macOS / Linux
+
+아래 명령을 터미널에 **순서대로** 입력한다.
+
+```bash
+python3 --version
+mkdir -p snowflake-python-lab
+cd snowflake-python-lab
+python3 -m venv .venv
+source .venv/bin/activate
+python --version
+```
+
+### Windows PowerShell
+
+```powershell
+py --version
+mkdir snowflake-python-lab
+cd snowflake-python-lab
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python --version
+```
+
+> `python3` 또는 `py` 명령을 찾지 못하면 Python을 먼저 설치해야 한다. Windows에서 PowerShell 실행 정책 때문에 활성화가 차단되면, 정책을 무작정 변경하기보다 **명령 프롬프트(cmd)** 에서 `.venv\Scripts\activate.bat`을 실행해도 된다.
+
+가상환경을 종료하려면 운영체제와 상관없이 다음을 입력한다.
+
+```bash
+deactivate
+```
+
+## 1-2. 첫 번째 Python 파일 만들기
+
+프로젝트 폴더에 `day01.py` 파일을 만들고 아래 전체 내용을 저장한다.
+
+```python
+print("Hello, Python!")
+print("Snowflake 엔지니어의 Python 학습 시작")
+print(1 + 2)
+```
+
+실행:
+
+```bash
+python day01.py
+```
+
+예상 출력:
+
+```text
+Hello, Python!
+Snowflake 엔지니어의 Python 학습 시작
+3
+```
+
+## 1-3. 기본 문법 규칙
+
+```python
+# # 뒤는 주석이며 실행되지 않는다.
+print("문자열")  # 괄호와 따옴표에 주의
+
+order_count = 3  # 변수 이름은 snake_case 권장
+print(order_count)
+```
+
+- `print()`는 결과를 화면에 출력한다.
+- 문자열에는 `'작은따옴표'` 또는 `"큰따옴표"`를 사용한다.
+- Python은 **대소문자를 구분**한다. `order_id`와 `Order_ID`는 다르다.
+- 들여쓰기는 이후 조건문·반복문·함수에서 중요한 문법이 된다(2주차에 본격 학습).
+
+### Day 1 실습
+
+1. `day01.py`에 본인이 관리하는 데이터 영역(예: `SALES`, `CUSTOMER`)을 출력하는 문장을 추가한다.
+2. `print(10 * 3)`과 `print("10" + "3")`의 결과 차이를 확인한다.
+3. 가상환경을 종료한 뒤 다시 활성화해 본다.
+
+**점검 질문:** `"10" + "3"`이 `13`이 아닌 이유는 무엇일까?
+
+---
+
+# Day 2. 변수와 기본 자료형
+
+## 2-1. 변수는 데이터에 붙이는 이름
+
+```python
+order_id = "O-1001"
+amount = 35000
+is_paid = True
+
+print(order_id)
+print(amount)
+print(is_paid)
+```
+
+SQL에서 `SELECT` 결과의 한 행을 본다고 생각해 보자. 각 컬럼의 값은 Python에서 변수로 표현할 수 있다.
+
+| 주문 필드 | 값 예시 | Python 타입 |
+|---|---|---|
+| `ORDER_ID` | `"O-1001"` | `str` |
+| `AMOUNT` | `35000` | `int` |
+| `DISCOUNT_RATE` | `0.15` | `float` |
+| `IS_PAID` | `True` | `bool` |
+| `MEMO` | `None` | `NoneType` |
+
+## 2-2. 다섯 가지 기본 값
+
+```python
+order_id = "O-1001"      # str: 텍스트
+amount = 35000            # int: 정수
+rate = 0.15               # float: 실수
+is_paid = True            # bool: 참/거짓
+memo = None               # None: 값이 없음을 나타냄
+
+print(type(order_id))
+print(type(amount))
+print(type(rate))
+print(type(is_paid))
+print(type(memo))
+```
+
+- `None`은 문자열 `"None"`이 아니다.
+- `0`, `""`(빈 문자열), `None`은 서로 다른 값이다.
+- 금액처럼 정확한 합계가 필요한 값은 이번 실습에서 **정수 원 단위**로 저장한다. 실제로 소수 화폐 단위를 다룰 때는 정수 최소 단위 또는 `decimal.Decimal` 등 정확도가 적절한 타입을 고려한다.
+
+## 2-3. 변수에 새로운 값을 대입하기
+
+```python
+amount = 35000
+print(amount)
+
+amount = 42000
+print(amount)
+```
+
+같은 변수에 다시 대입하면 **변수가 가리키는 값**이 바뀐다. SQL의 테이블 업데이트와는 다른 개념이다.
+
+### Day 2 실습
+
+다음 필드를 변수로 만들고 `type()`으로 확인한다.
+
+```text
+고객 ID: C-001
+구매 금액: 42000
+첫 구매 여부: False
+배송 메모: 없음(None)
+```
+
+추가 질문: `customer_id = 1`과 `customer_id = "001"` 중 ID에 더 적절한 표현은 무엇일까? 이유를 설명한다.
+
+---
+
+# Day 3. 문자열과 숫자 다루기
+
+## 3-1. 문자열 연결과 f-string
+
+```python
+customer_id = "C-001"
+amount = 42000
+
+print("고객: " + customer_id)
+print(f"고객 {customer_id}의 주문 금액: {amount}원")
+print(f"고객 {customer_id}의 주문 금액: {amount:,}원")
+```
+
+예상 출력:
+
+```text
+고객: C-001
+고객 C-001의 주문 금액: 42000원
+고객 C-001의 주문 금액: 42,000원
+```
+
+`f"...{변수}..."` 형태는 문자열에 값을 끼워 넣는 문법이다. `:,`는 천 단위 구분 기호를 넣는다.
+
+## 3-2. 문자열 인덱싱·슬라이싱
+
+```python
+order_id = "ORD-2026-001"
+
+print(order_id[0])      # O: 첫 글자의 인덱스는 0
+print(order_id[:3])     # ORD
+print(order_id[-3:])    # 001
+print(len(order_id))    # 문자열 길이
+```
+
+슬라이싱 `text[start:end]`는 **시작 위치는 포함하고 종료 위치는 포함하지 않는다.**
+
+## 3-3. 자주 쓰는 문자열 메서드
+
+```python
+raw_category = "  Food  "
+
+print(raw_category.strip())         # 앞뒤 공백 제거
+print(raw_category.strip().lower()) # food
+
+order_code = "ORD-2026-001"
+print(order_code.split("-"))        # ['ORD', '2026', '001']
+```
+
+Snowflake에서 `TRIM()`, `LOWER()`, `SPLIT()`을 사용하는 것과 목적이 비슷하다.
+
+## 3-4. 숫자 연산과 형 변환
+
+```python
+amount = 42000
+quantity = 3
+
+print(amount + 1000)    # 덧셈
+print(amount * quantity) # 곱셈
+print(7 / 2)            # 3.5: 일반 나눗셈
+print(7 // 2)           # 3: 몫
+print(7 % 2)            # 1: 나머지
+
+raw_amount = "42000"
+print(int(raw_amount) + 1000)  # 43000
+print(str(amount) + "원")    # 42000원
+```
+
+> `int("42,000")`은 오류가 발생한다. 문자열에 쉼표가 있을 경우 `int("42,000".replace(",", ""))`처럼 먼저 정제해야 한다. 입력이 올바르지 않을 때의 예외 처리는 3주차에 깊게 다룬다.
+
+### Day 3 실습
+
+1. `"  electronics  "`를 `"ELECTRONICS"`로 정규화한다.
+2. `"ORD-2026-031"`에서 마지막 주문 번호 `"031"`을 추출한다.
+3. `unit_price = 12500`, `quantity = 4`일 때 `총 금액: 50,000원`을 출력한다.
+
+---
+
+# Day 4. 리스트와 튜플
+
+## 4-1. 리스트(`list`): 순서가 있는 여러 값
+
+```python
+amounts = [35000, 42000, 18000]
+
+print(amounts[0])     # 35000
+print(amounts[-1])    # 18000
+print(amounts[:2])    # [35000, 42000]
+print(len(amounts))   # 3
+print(sum(amounts))   # 95000
+```
+
+리스트는 순서를 유지하며 값을 **추가·수정·삭제**할 수 있다.
+
+```python
+amounts = [35000, 42000]
+amounts.append(18000)
+amounts[0] = 37000
+
+print(amounts)  # [37000, 42000, 18000]
+```
+
+`append()`는 원래 리스트를 변경한다. 반환값은 `None`이므로 `amounts = amounts.append(18000)`처럼 작성하면 안 된다.
+
+## 4-2. 튜플(`tuple`): 변경할 수 없는 순서형 자료구조
+
+```python
+report_period = (2026, 11)
+
+print(report_period[0])  # 2026
+print(report_period[1])  # 11
+```
+
+튜플은 생성 후 항목을 수정할 수 없다.
+
+```python
+# 아래 코드는 TypeError가 발생하므로 실행하지 않는다.
+# report_period[0] = 2027
+```
+
+**선택 기준:** 주문 목록처럼 항목이 늘어나고 수정될 수 있으면 `list`, 고정된 기간 쌍처럼 변경하지 않을 값은 `tuple`을 고려한다.
+
+## 4-3. 리스트 안에 리스트가 있을 수도 있다
+
+```python
+monthly_amounts = [
+    [10000, 20000],
+    [30000, 40000],
+]
+
+print(monthly_amounts[0][1])  # 20000
+```
+
+실무에서는 행마다 의미가 다른 값들을 위치로 관리하기보다 **딕셔너리**를 사용하는 경우가 많다. 다음 날 학습한다.
+
+### Day 4 실습
+
+1. `[12000, 35000, 28000]`의 건수, 합계, 두 번째 금액을 출력한다.
+2. 리스트 마지막에 `15000`을 추가한 뒤 다시 합계를 출력한다.
+3. `("SALES", "ORDERS")`라는 튜플을 만들고 첫 번째 요소를 출력한다.
+
+---
+
+# Day 5. 딕셔너리와 중첩 데이터
+
+## 5-1. 딕셔너리(`dict`): 컬럼 이름과 값을 연결하기
+
+SQL 결과의 한 행을 Python에서 표현하는 가장 직관적인 방법 중 하나다.
+
+```python
+order = {
+    "order_id": "O-001",
+    "customer_id": "C-001",
+    "category": "식품",
+    "amount": 35000,
+    "status": "완료",
+}
+
+print(order["order_id"])       # O-001
+print(order["amount"])         # 35000
+print(order.get("coupon_code")) # None
+```
+
+- `order["amount"]`: 키가 없으면 `KeyError` 발생.
+- `order.get("coupon_code")`: 키가 없으면 기본적으로 `None` 반환.
+- `order.get("coupon_code", "없음")`: 키가 없으면 `"없음"` 반환.
+
+> `get()` 결과가 `None`이라고 해서 항상 키가 없다는 뜻은 아니다. 해당 키가 실제로 존재하면서 값이 `None`일 수도 있다. 둘을 구분하려면 `"coupon_code" in order`를 사용한다.
+
+## 5-2. 딕셔너리 수정과 중첩 구조
+
+```python
+customer = {
+    "customer_id": "C-001",
+    "name": "민지",
+    "profile": {
+        "region": "서울",
+        "grade": "VIP",
+    },
+}
+
+print(customer["profile"]["region"])  # 서울
+
+customer["profile"]["grade"] = "GOLD"
+print(customer["profile"]["grade"])   # GOLD
+```
+
+## 5-3. 여러 레코드 = 리스트 안에 딕셔너리
+
+```python
+orders = [
+    {"order_id": "O-001", "customer_id": "C-001", "amount": 35000},
+    {"order_id": "O-002", "customer_id": "C-002", "amount": 42000},
+    {"order_id": "O-003", "customer_id": "C-001", "amount": 18000},
+]
+
+print(orders[0])                   # 첫 번째 주문 레코드
+print(orders[1]["customer_id"])  # C-002
+print(orders[2]["amount"])       # 18000
+```
+
+이 구조는 개념적으로 **테이블 = 리스트**, **행 = 딕셔너리**, **컬럼 이름 = 딕셔너리 키**에 대응한다. 실제 SQL 테이블과 메모리 구조가 동일하다는 뜻은 아니다.
+
+### Day 5 실습
+
+1. `order_id`, `customer_id`, `amount`, `status`를 가진 딕셔너리 하나를 만든다.
+2. `status`를 `"완료"`로 변경한다.
+3. 딕셔너리 3개를 담은 리스트를 만들고 두 번째 주문의 금액을 출력한다.
+4. 존재하지 않는 `memo` 키를 `.get()`으로 안전하게 조회한다.
+
+---
+
+# Day 6. 집합(`set`)과 자료구조 선택
+
+## 6-1. 집합은 중복을 제거한다
+
+```python
+customer_ids = ["C-001", "C-002", "C-001", "C-003"]
+unique_customer_ids = set(customer_ids)
+
+print(len(customer_ids))         # 4: 전체 등장 횟수
+print(len(unique_customer_ids))  # 3: 중복 제외 고객 수
+```
+
+`set`은 중복 원소를 저장하지 않는다. **표시 순서는 보장되지 않으므로** 출력 순서가 필요할 때는 `sorted()`를 사용한다.
+
+```python
+categories = {"식품", "전자기기", "식품", "생활용품"}
+print(sorted(categories))  # ['생활용품', '식품', '전자기기']
+```
+
+## 6-2. 포함 여부와 집합 연산
+
+```python
+vip_customers = {"C-001", "C-003"}
+buyers = {"C-001", "C-002"}
+
+print("C-001" in vip_customers)  # True
+print(vip_customers & buyers)    # 공통 고객: {'C-001'}
+print(vip_customers - buyers)    # 구매하지 않은 VIP: {'C-003'}
+```
+
+SQL의 `DISTINCT`, `INTERSECT`, `EXCEPT`와 **개념적으로 유사**하지만, Python 집합은 SQL의 NULL 처리·행 구조와 동일하지 않다.
+
+## 6-3. 어떤 자료구조를 쓸까?
+
+| 요구 사항 | 우선 고려할 자료구조 | 예시 |
+|---|---|---|
+| 순서가 있는 주문 목록 | `list` | `[35000, 42000]` |
+| 변경하지 않을 기간 정보 | `tuple` | `(2026, 11)` |
+| 한 주문의 컬럼과 값 | `dict` | `{"order_id": "O-001"}` |
+| 중복 없는 고객 ID | `set` | `{"C-001", "C-002"}` |
+
+### Day 6 실습
+
+1. `["A", "B", "A", "C", "B"]`에서 중복 제외 항목 수를 구한다.
+2. 두 집합 `{"A", "B", "C"}`와 `{"B", "D"}`의 교집합을 구한다.
+3. 고객 ID가 10건 기록돼 있는데 고유 고객 ID가 7개라면 두 숫자는 각각 무엇을 의미하는가?
+
+---
+
+# Day 7. 종합 미니 프로젝트: 주문 데이터 구조화
+
+## 7-1. 요구 사항
+
+아래 4건의 주문 데이터를 활용한다.
+
+| 주문 ID | 고객 ID | 카테고리 | 주문금액(원) | 상태 |
+|---|---|---|---:|---|
+| O-001 | C-001 | 식품 | 35,000 | 완료 |
+| O-002 | C-002 | 생활용품 | 42,000 | 완료 |
+| O-003 | C-001 | 식품 | 18,000 | 완료 |
+| O-004 | C-003 | 전자기기 | 32,000 | 완료 |
+
+**구현 목표**
+
+1. 전체 주문을 `list[dict]` 형태로 표현한다.
+2. 전체 주문 건수를 출력한다.
+3. 주문 금액 총합을 출력한다.
+4. 중복 제외 고객 수를 출력한다.
+5. 중복 제외 카테고리를 정렬해 출력한다.
+6. 첫 번째 주문의 ID, 고객 ID, 금액을 출력한다.
+
+> 이번 주에는 `for` 반복문과 함수 정의를 배우지 않았으므로, 4개 레코드를 직접 인덱스로 선택한다. **일부러 반복을 남겨둔 예제**다. 다음 주에 `for` 문으로 개선한다. 실제 업무에서는 이런 하드코딩을 유지하면 안 된다.
+
+## 7-2. 완성 코드: `week01_project.py`
+
+프로젝트 폴더에 `week01_project.py`를 만들고 다음 코드를 **전체 복사**해 저장한다.
+
+```python
+# week01_project.py
+# Python 1주차: 자료형과 컬렉션을 활용한 주문 요약
+
+# 1. 한 행은 dict, 여러 행은 list로 표현한다.
+orders = [
+    {
+        "order_id": "O-001",
+        "customer_id": "C-001",
+        "category": "식품",
+        "amount": 35000,
+        "status": "완료",
+    },
+    {
+        "order_id": "O-002",
+        "customer_id": "C-002",
+        "category": "생활용품",
+        "amount": 42000,
+        "status": "완료",
+    },
+    {
+        "order_id": "O-003",
+        "customer_id": "C-001",
+        "category": "식품",
+        "amount": 18000,
+        "status": "완료",
+    },
+    {
+        "order_id": "O-004",
+        "customer_id": "C-003",
+        "category": "전자기기",
+        "amount": 32000,
+        "status": "완료",
+    },
+]
+
+# 2. 주문 건수
+order_count = len(orders)
+
+# 3. 금액 목록을 만들어 합계 계산
+amounts = [
+    orders[0]["amount"],
+    orders[1]["amount"],
+    orders[2]["amount"],
+    orders[3]["amount"],
+]
+total_amount = sum(amounts)
+
+# 4. set으로 고객 ID 중복 제거
+customer_ids = {
+    orders[0]["customer_id"],
+    orders[1]["customer_id"],
+    orders[2]["customer_id"],
+    orders[3]["customer_id"],
+}
+unique_customer_count = len(customer_ids)
+
+# 5. 카테고리 중복 제거 후 정렬
+categories = {
+    orders[0]["category"],
+    orders[1]["category"],
+    orders[2]["category"],
+    orders[3]["category"],
+}
+unique_categories = sorted(categories)
+
+# 6. 첫 주문 정보 추출
+first_order = orders[0]
+first_order_id = first_order["order_id"]
+first_customer_id = first_order["customer_id"]
+first_amount = first_order["amount"]
+
+# 7. 결과 출력
+print("=== 1주차 주문 데이터 분석 ===")
+print(f"전체 주문 수: {order_count}건")
+print(f"주문 금액 합계: {total_amount:,}원")
+print(f"고객 수(중복 제외): {unique_customer_count}명")
+print(f"상품 카테고리: {unique_categories}")
+print(
+    f"첫 주문: {first_order_id} / "
+    f"{first_customer_id} / {first_amount:,}원"
+)
+```
+
+터미널에서 실행:
+
+```bash
+python week01_project.py
+```
+
+**정상 출력**
+
+```text
+=== 1주차 주문 데이터 분석 ===
+전체 주문 수: 4건
+주문 금액 합계: 127,000원
+고객 수(중복 제외): 3명
+상품 카테고리: ['생활용품', '식품', '전자기기']
+첫 주문: O-001 / C-001 / 35,000원
+```
+
+### 7-3. SQL 관점에서 이해하기
+
+동일한 주문 데이터가 Snowflake 테이블 `ORDERS`에 저장돼 있다고 가정하면 다음 SQL과 의도가 비슷하다.
+
+```sql
+SELECT
+    COUNT(*) AS ORDER_COUNT,
+    SUM(AMOUNT) AS TOTAL_AMOUNT,
+    COUNT(DISTINCT CUSTOMER_ID) AS UNIQUE_CUSTOMER_COUNT
+FROM ORDERS;
+```
+
+이번 Python 프로젝트는 **컬렉션 다루기 연습**이 목적이다. 데이터가 수백만 건이면 행을 하나씩 로컬로 내려받아 이렇게 계산하기보다 Snowflake에서 SQL 집계하는 것이 일반적으로 합리적이다.
+
+### 7-4. 추가 도전 문제
+
+정답을 보기 전에 직접 수정해 본다.
+
+1. `O-005 / C-004 / 식품 / 15,000원 / 완료` 주문 한 건을 리스트에 추가한다.
+2. 주문 건수가 5건으로 변경되도록 코드를 수정한다.
+3. 총 금액이 **142,000원**, 고유 고객이 **4명**인지 확인한다.
+4. 현재 코드에서 주문이 추가될 때 수정해야 하는 줄을 찾아본다.
+5. **2주차 미리보기:** 반복문을 배우면 어떤 부분이 짧아질지 설명한다.
+
+---
+
+# 실습 정답·힌트
+
+> 각 Day의 문제를 먼저 풀고 확인하자. 정답은 하나만 있는 것이 아니다.
+
+## Day 1 정답 예시
+
+```python
+print("SALES")
+print(10 * 3)       # 30
+print("10" + "3") # 103
+```
+
+`"10"`과 `"3"`은 숫자가 아니라 문자열이어서 `+`가 이어 붙이기로 동작한다.
+
+## Day 2 정답 예시
+
+```python
+customer_id = "C-001"
+amount = 42000
+is_first_purchase = False
+shipping_memo = None
+
+print(type(customer_id))
+print(type(amount))
+print(type(is_first_purchase))
+print(type(shipping_memo))
+```
+
+고객 ID는 수량이 아니라 **식별자**이므로 일반적으로 문자열로 표현한다. 앞의 0을 보존해야 하는 경우 특히 그렇다.
+
+## Day 3 정답 예시
+
+```python
+category = "  electronics  "
+print(category.strip().upper())       # ELECTRONICS
+
+order_id = "ORD-2026-031"
+print(order_id[-3:])                  # 031
+
+unit_price = 12500
+quantity = 4
+total = unit_price * quantity
+print(f"총 금액: {total:,}원")       # 총 금액: 50,000원
+```
+
+## Day 4 정답 예시
+
+```python
+amounts = [12000, 35000, 28000]
+print(len(amounts))   # 3
+print(sum(amounts))   # 75000
+print(amounts[1])     # 35000
+
+amounts.append(15000)
+print(sum(amounts))   # 90000
+
+table_name = ("SALES", "ORDERS")
+print(table_name[0])  # SALES
+```
+
+## Day 5 정답 예시
+
+```python
+order = {
+    "order_id": "O-010",
+    "customer_id": "C-007",
+    "amount": 50000,
+    "status": "대기",
+}
+order["status"] = "완료"
+
+orders = [
+    order,
+    {"order_id": "O-011", "customer_id": "C-008", "amount": 30000},
+    {"order_id": "O-012", "customer_id": "C-009", "amount": 10000},
+]
+
+print(orders[1]["amount"])  # 30000
+print(order.get("memo"))     # None
+```
+
+## Day 6 정답 예시
+
+```python
+items = ["A", "B", "A", "C", "B"]
+print(len(set(items)))  # 3
+
+left = {"A", "B", "C"}
+right = {"B", "D"}
+print(left & right)    # {'B'}
+```
+
+10건은 **ID가 등장한 총 횟수**, 7개는 **중복을 제거한 고유 ID 수**다. 단, 이벤트 기록 기준이라면 동일 고객의 여러 이벤트가 포함될 수 있다.
+
+## Day 7 도전 과제 힌트
+
+먼저 `orders.append({...})`로 새 주문을 추가한 다음, `amounts`, `customer_ids`, `categories`에도 **다섯 번째 주문**을 포함해야 한다. 이처럼 데이터가 늘어날 때마다 손으로 인덱스를 수정하는 문제를 다음 주의 **반복문과 함수**로 해결한다.
+
+---
+
+# 자주 발생하는 오류와 해결
+
+| 오류·증상 | 흔한 원인 | 해결 |
+|---|---|---|
+| `python: command not found` | Python 설치나 PATH 문제 | 운영체제에 맞게 `python3`, `py` 사용 여부 확인 |
+| `SyntaxError` | 따옴표·괄호 누락, 잘못된 문법 | 오류 줄과 직전 줄 확인 |
+| `NameError` | 변수 이름 오타 또는 변수 미정의 | 변수 이름과 대소문자 확인 |
+| `TypeError` | 자료형에 맞지 않는 연산 | `type()`으로 값의 타입 확인 |
+| `KeyError` | 딕셔너리에 없는 키를 `[]`로 조회 | 실제 키 확인, 필요하면 `get()` 사용 |
+| `IndexError` | 리스트 범위를 벗어난 인덱스 | `len()`으로 길이 확인 |
+| `ValueError` | 잘못된 문자열을 숫자로 변환 | 입력값을 검사하고 정제 |
+| 한글 출력 깨짐 | 편집기·터미널 인코딩 문제 | 소스 파일 UTF-8 저장, 터미널 설정 확인 |
+
+**디버깅 기본 습관:** 오류 메시지 마지막 줄 읽기 → 오류가 난 파일·줄 확인 → 관련 변수 `print()` 및 `type()` 확인 → 한 번에 한 부분만 수정.
+
+---
+
+# 1주차 최종 점검
+
+다음 질문에 코드를 보지 않고 답할 수 있는지 확인하자.
+
+1. `int`, `float`, `str`, `bool`, `None`은 각각 무엇인가?
+2. `"42000"`과 `42000`은 어떤 점이 다른가?
+3. 리스트와 튜플은 어떻게 다른가?
+4. 딕셔너리에서 `order["amount"]`와 `order.get("amount")`는 무엇이 다른가?
+5. `len(["A", "A", "B"])`와 `len(set(["A", "A", "B"]))`는 각각 얼마인가?
+6. `orders[1]["amount"]`에서 `[1]`과 `["amount"]`는 각각 무엇을 의미하는가?
+7. 주문 건수가 증가할 때 이번 프로젝트의 한계는 무엇인가?
+
+**완료 기준:** 체크리스트 7개 중 6개 이상을 직접 구현하고, `week01_project.py`가 정상 출력되면 다음 주로 넘어간다.
+
+## 2주차 예고
+
+- `if`, `elif`, `else`로 주문 데이터 검증
+- `for`, `while`로 여러 레코드 자동 처리
+- 리스트 컴프리헨션으로 필터링
+- `def`로 반복 로직을 함수로 분리
+- 오늘 만든 `week01_project.py`를 **주문이 몇 건이든 작동하는 형태로 개선**
+
+## 참고 자료
+
+- [Python 공식 튜토리얼](https://docs.python.org/3/tutorial/)
+- [Python 기본 자료형](https://docs.python.org/3/library/stdtypes.html)
+- [Python 가상환경(`venv`)](https://docs.python.org/3/library/venv.html)
+
+---
+
+**학습 원칙:** 이번 주에는 데이터 분석 라이브러리를 많이 설치하는 것보다, 한 행·여러 행·고유값을 Python에서 정확하게 표현하고 직접 다룰 수 있는 것이 중요하다.
