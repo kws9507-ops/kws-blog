@@ -5,6 +5,8 @@ main:
     url: /categories/Linux/
   - title: "<span style='color: red; font-weight: bold;'>Oracle</span>"
     url: /categories/Oracle/
+  - title: "<span style='font-weight: bold;'>Python</span>"
+    url: /categories/Python/
   - title: "<span style='color: orange; font-weight: bold;'>SharePlex</span>"
     url: /categories/SharePlex/
   - title: "<span style='color: #00a8e8; font-weight: bold;'>Snowflake</span>"
