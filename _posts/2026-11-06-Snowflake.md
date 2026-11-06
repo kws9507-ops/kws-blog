@@ -1,6 +1,6 @@
 ---
 title: "[Snowflake] Snowflake 기본 명령어 정리"
-date: 2026-10-22 10:00:00 +0900
+date: 2026-11-06 10:00:00 +0900
 categories:
   - Snowflake
 tags:
