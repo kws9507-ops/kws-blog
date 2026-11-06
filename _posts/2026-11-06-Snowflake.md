@@ -1,6 +1,13 @@
-# Snowflake 기본 명령어 정리
+---
+title: "[Snowflake] Snowflake 기본 명령어 정리"
+date: 2026-10-22 10:00:00 +0900
+categories:
+  - Snowflake
+tags:
+  - Snowflake
+---
 
-## 1. 컨텍스트 설정
+# 1. 컨텍스트 설정
 ```sql
 USE ROLE SYSADMIN;
 USE WAREHOUSE COMPUTE_WH;
@@ -11,7 +18,7 @@ USE SCHEMA MY_SCHEMA;
 SELECT CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA(), CURRENT_USER();
 ```
 
-## 2. 웨어하우스 (Warehouse)
+# 2. 웨어하우스 (Warehouse)
 ```sql
 CREATE WAREHOUSE MY_WH
   WAREHOUSE_SIZE = 'XSMALL'
@@ -26,7 +33,7 @@ ALTER WAREHOUSE MY_WH RESUME;
 DROP WAREHOUSE MY_WH;
 ```
 
-## 3. 데이터베이스 / 스키마
+# 3. 데이터베이스 / 스키마
 ```sql
 CREATE DATABASE MY_DB;
 CREATE SCHEMA MY_DB.MY_SCHEMA;
@@ -40,7 +47,7 @@ DROP DATABASE MY_DB;
 UNDROP DATABASE MY_DB;   -- Time Travel 기간 내 복구 (같은 이름 객체가 존재하면 실패)
 ```
 
-## 4. 테이블
+# 4. 테이블
 ```sql
 -- 참고: PRIMARY KEY / UNIQUE / FOREIGN KEY는 메타데이터일 뿐 강제되지 않음 (NOT NULL만 강제, 일반 테이블 기준 — Hybrid Table은 PK/UNIQUE/FK 강제)
 CREATE TABLE CUSTOMERS (
@@ -74,7 +81,7 @@ UNDROP TABLE CUSTOMERS;
 ALTER TABLE CUSTOMERS RENAME TO CLIENTS;
 ```
 
-## 5. DML (데이터 조작)
+# 5. DML (데이터 조작)
 ```sql
 INSERT INTO CUSTOMERS (NAME, EMAIL) VALUES ('홍길동', 'hong@example.com');
 
@@ -89,7 +96,7 @@ WHEN MATCHED THEN UPDATE SET t.NAME = s.NAME, t.EMAIL = s.EMAIL
 WHEN NOT MATCHED THEN INSERT (ID, NAME, EMAIL) VALUES (s.ID, s.NAME, s.EMAIL);
 ```
 
-## 6. 조회 (SELECT)
+# 6. 조회 (SELECT)
 ```sql
 SELECT * FROM CUSTOMERS LIMIT 10;
 
@@ -110,7 +117,7 @@ SELECT * FROM CUSTOMERS AT (OFFSET => -60*5);          -- 5분 전
 SELECT * FROM CUSTOMERS BEFORE (STATEMENT => '<query_id>');
 ```
 
-## 7. 뷰
+# 7. 뷰
 ```sql
 CREATE OR REPLACE VIEW V_ACTIVE_CUSTOMERS AS
 SELECT * FROM CUSTOMERS WHERE EMAIL IS NOT NULL;
@@ -123,7 +130,7 @@ SHOW VIEWS;
 DROP VIEW V_ACTIVE_CUSTOMERS;
 ```
 
-## 8. 스테이지 & 데이터 로딩
+# 8. 스테이지 & 데이터 로딩
 > PUT / GET은 Snowsight 워크시트에서 실행 불가 — SnowSQL, Snowflake CLI(`snow sql`), 드라이버에서 사용
 
 ```sql
@@ -162,7 +169,7 @@ GET @MY_STAGE/export/ 'file://C:/data/export/';
 REMOVE @MY_STAGE/customers.csv.gz;
 ```
 
-## 9. 반정형 데이터 (JSON)
+# 9. 반정형 데이터 (JSON)
 ```sql
 CREATE TABLE RAW_JSON (V VARIANT);
 
@@ -176,7 +183,7 @@ LATERAL FLATTEN(INPUT => V:items) f;
 SELECT PARSE_JSON('{"a":1}') AS J;
 ```
 
-## 10. 사용자 / 역할 / 권한
+# 10. 사용자 / 역할 / 권한
 ```sql
 CREATE ROLE ANALYST;
 CREATE USER KIM
@@ -207,7 +214,7 @@ SHOW GRANTS TO USER KIM;
 SHOW GRANTS ON TABLE CUSTOMERS;
 ```
 
-## 11. 태스크 & 스트림
+# 11. 태스크 & 스트림
 ```sql
 -- 스트림 (CDC)
 CREATE STREAM CUSTOMERS_STREAM ON TABLE CUSTOMERS;
@@ -231,7 +238,7 @@ EXECUTE TASK MY_TASK;
 SHOW TASKS;
 ```
 
-## 12. 동적 테이블 (Dynamic Table)
+# 12. 동적 테이블 (Dynamic Table)
 ```sql
 CREATE OR REPLACE DYNAMIC TABLE DT_CUSTOMER_SALES
   TARGET_LAG = '1 hour'
@@ -246,7 +253,7 @@ ALTER DYNAMIC TABLE DT_CUSTOMER_SALES REFRESH;
 ALTER DYNAMIC TABLE DT_CUSTOMER_SALES SUSPEND;
 ```
 
-## 13. 함수 & 프로시저
+# 13. 함수 & 프로시저
 ```sql
 -- SQL UDF
 -- NUMBER만 쓰면 scale 0이라 입력/결과 모두 반올림됨 (예: 15.5 → 16 → 17.6 → 18)
@@ -269,7 +276,7 @@ $$;
 CALL DELETE_OLD(30);
 ```
 
-## 14. 리소스 모니터 (크레딧 한도)
+# 14. 리소스 모니터 (크레딧 한도)
 ```sql
 -- ACCOUNTADMIN 필요
 CREATE RESOURCE MONITOR MONTHLY_LIMIT
@@ -285,7 +292,7 @@ ALTER WAREHOUSE COMPUTE_WH SET RESOURCE_MONITOR = MONTHLY_LIMIT;
 SHOW RESOURCE MONITORS;
 ```
 
-## 15. 모니터링 / 기타 유용한 명령
+# 15. 모니터링 / 기타 유용한 명령
 ```sql
 -- 최근 쿼리 이력 (현재 데이터베이스가 지정되어 있어야 함)
 SELECT QUERY_ID, QUERY_TEXT, EXECUTION_STATUS, TOTAL_ELAPSED_TIME
@@ -314,7 +321,7 @@ ALTER SESSION SET TIMEZONE = 'Asia/Seoul';
 SHOW PARAMETERS IN SESSION;
 ```
 
-## 16. 자주 쓰는 함수
+# 16. 자주 쓰는 함수
 | 분류 | 함수 |
 | --- | --- |
 | 날짜 | `CURRENT_DATE()`, `CURRENT_TIMESTAMP()`, `DATEADD()`, `DATEDIFF()`, `DATE_TRUNC()`, `TO_DATE()` |
