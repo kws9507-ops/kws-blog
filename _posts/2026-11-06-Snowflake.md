@@ -321,11 +321,12 @@ ALTER SESSION SET TIMEZONE = 'Asia/Seoul';
 SHOW PARAMETERS IN SESSION;
 ```
 
+
 # 16. 자주 쓰는 함수
 | 분류 | 함수 |
-| --- | --- |
+|---|---|
 | 날짜 | `CURRENT_DATE()`, `CURRENT_TIMESTAMP()`, `DATEADD()`, `DATEDIFF()`, `DATE_TRUNC()`, `TO_DATE()` |
-| 문자열 | `CONCAT()` / `\|\|`, `SUBSTR()`, `UPPER()`, `LOWER()`, `TRIM()`, `SPLIT_PART()`, `REGEXP_REPLACE()` |
+| 문자열 | `CONCAT()`, `\|\|`, `SUBSTR()`, `UPPER()`, `LOWER()`, `TRIM()`, `SPLIT_PART()`, `REGEXP_REPLACE()` |
 | 변환 | `CAST(x AS type)`, `x::type`, `TRY_CAST()`, `TO_NUMBER()`, `TO_VARCHAR()` |
 | NULL | `COALESCE()`, `NVL()`, `IFF()`, `NULLIF()`, `ZEROIFNULL()` |
 | 집계 | `COUNT()`, `SUM()`, `AVG()`, `MIN()`, `MAX()`, `LISTAGG()`, `ARRAY_AGG()`, `APPROX_COUNT_DISTINCT()` |
