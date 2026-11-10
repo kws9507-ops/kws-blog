@@ -323,6 +323,7 @@ SHOW PARAMETERS IN SESSION;
 
 
 # 16. 자주 쓰는 함수
+
 | 분류 | 함수 |
 |---|---|
 | 날짜 | `CURRENT_DATE()`, `CURRENT_TIMESTAMP()`, `DATEADD()`, `DATEDIFF()`, `DATE_TRUNC()`, `TO_DATE()` |
